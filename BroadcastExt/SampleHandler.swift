@@ -1,5 +1,4 @@
 import ReplayKit
-import Vision
 import ImageIO
 
 /// Nhận khung hình toàn màn hình từ ReplayKit, chạy OCR (Vision) rồi ghi kết quả vào App Group.
@@ -77,34 +76,15 @@ final class SampleHandler: RPBroadcastSampleHandler {
         settings = AppSettings.load()
         let defaults = AppGroup.defaults
 
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = settings.ocrAccuracy == .fast ? .fast : .accurate
-        request.recognitionLanguages = ["en-US"]
-        request.usesLanguageCorrection = true
-        request.minimumTextHeight = 0.008
-
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
         defaults.set(true, forKey: SettingsKey.ocrInFlight)
+        let lines: [OCRLine]
         do {
-            try handler.perform([request])
+            lines = try TextRecognizer.recognize(pixelBuffer: pixelBuffer, orientation: orientation, accuracy: settings.ocrAccuracy)
         } catch {
             defaults.set(false, forKey: SettingsKey.ocrInFlight)
             return
         }
         defaults.set(false, forKey: SettingsKey.ocrInFlight)
-
-        let lines: [OCRLine] = (request.results ?? []).compactMap { observation in
-            guard let candidate = observation.topCandidates(1).first else { return nil }
-            let box = observation.boundingBox // gốc dưới-trái
-            return OCRLine(
-                text: candidate.string,
-                confidence: candidate.confidence,
-                x: Double(box.minX),
-                y: Double(1 - box.maxY),
-                w: Double(box.width),
-                h: Double(box.height)
-            )
-        }
 
         // Không ghi lại nếu chữ không đổi (vẫn ghi định kỳ để app cập nhật vị trí).
         let signature = lines.map(\.text).joined(separator: "\n")

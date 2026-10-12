@@ -1,5 +1,6 @@
 import XCTest
 import CoreVideo
+import UIKit
 @testable import MangaTrans
 
 final class TextNormalizerTests: XCTestCase {
@@ -187,5 +188,46 @@ final class PiPRendererTests: XCTestCase {
         let buffer = try XCTUnwrap(PiPRenderer.render(content, size: CGSize(width: 1080, height: 540), showOriginal: true, fontScale: 1))
         XCTAssertEqual(CVPixelBufferGetWidth(buffer), 1080)
         XCTAssertEqual(CVPixelBufferGetHeight(buffer), 540)
+    }
+}
+
+final class BrowserTests: XCTestCase {
+    func testAddressInputBecomesURL() {
+        XCTAssertEqual(BrowserModel.url(from: "mangadex.org")?.absoluteString, "https://mangadex.org")
+        XCTAssertEqual(BrowserModel.url(from: " https://example.com/a?b=1 ")?.absoluteString, "https://example.com/a?b=1")
+        XCTAssertEqual(BrowserModel.url(from: "solo leveling chapter 1")?.host, "www.google.com")
+        XCTAssertEqual(BrowserModel.url(from: "manga")?.host, "www.google.com")
+        XCTAssertNil(BrowserModel.url(from: "   "))
+    }
+}
+
+final class TextRecognizerTests: XCTestCase {
+    /// Vẽ 2 bóng thoại lên ảnh, chạy OCR thật rồi gom nhóm — kiểm tra cả chuỗi xử lý của chế độ Trình duyệt.
+    func testRecognizesAndGroupsRenderedBubbles() throws {
+        let size = CGSize(width: 1000, height: 1400)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 44, weight: .bold),
+                .foregroundColor: UIColor.black,
+                .paragraphStyle: paragraph,
+            ]
+            ("I DON'T\nUNDERSTAND\nWHAT YOU'RE\nTRYING TO SAY." as NSString)
+                .draw(in: CGRect(x: 100, y: 150, width: 420, height: 260), withAttributes: attributes)
+            ("WHERE ARE\nYOU GOING?" as NSString)
+                .draw(in: CGRect(x: 450, y: 900, width: 420, height: 140), withAttributes: attributes)
+        }
+        let cgImage = try XCTUnwrap(image.cgImage)
+        let lines = try TextRecognizer.recognize(cgImage: cgImage, accuracy: .accurate)
+        let blocks = TextGrouper.group(lines, imageSize: size)
+
+        XCTAssertEqual(blocks.count, 2, "lines: \(lines.map(\.text))")
+        XCTAssertEqual(blocks.first?.key, "i don t understand what you re trying to say")
+        XCTAssertEqual(blocks.last?.key, "where are you going")
     }
 }

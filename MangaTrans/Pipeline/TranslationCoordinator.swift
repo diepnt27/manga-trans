@@ -21,10 +21,10 @@ final class TranslationCoordinator: ObservableObject {
     @Published private(set) var entries: [PiPEntry] = []
 
     let pip = PiPManager()
+    let translation = TranslationService()
+    private(set) lazy var browser = BrowserModel(translation: translation)
 
     private var filter = ScreenFilter()
-    private var cache = TranslationCache()
-    private var context: [TranslationPair] = []
     private var displayedKeys: [String] = []
     private var pendingKeys: [String] = []
     private var pendingBlocks: [TextBlock] = []
@@ -156,54 +156,40 @@ final class TranslationCoordinator: ObservableObject {
     private func commit(_ blocks: [TextBlock]) {
         displayedKeys = blocks.map(\.key)
         let settings = AppSettings.load()
-        let engine = settings.engine
 
-        let newEntries = blocks.map { block -> PiPEntry in
-            if let cached = cache.value(engine: engine, key: block.key) {
+        let initialEntries = blocks.map { block -> PiPEntry in
+            if let cached = translation.cached(block, engine: settings.engine) {
                 return PiPEntry(original: block.displayText, translation: cached, state: .done)
             }
             return PiPEntry(original: block.displayText, translation: "", state: .pending)
         }
-        showEntries(newEntries)
-
-        let missing = blocks.indices.filter { newEntries[$0].state == .pending }
-        guard !missing.isEmpty else {
+        showEntries(initialEntries)
+        guard initialEntries.contains(where: { $0.state == .pending }) else {
             phase = .showing
             return
         }
 
         phase = .translating
         translateTask?.cancel()
-        let translator = TranslatorFactory.make(settings)
-        let inputs = missing.map { blocks[$0].translationInput }
-        let recentContext = Array(context.suffix(8))
-        let initialEntries = newEntries
         translateTask = Task { [weak self] in
-            var newEntries = initialEntries
+            guard let self else { return }
             do {
-                let results = try await translator.translate(inputs, context: recentContext)
-                guard !Task.isCancelled, let self else { return }
-                for (offset, index) in missing.enumerated() {
-                    let translated = results[offset].trimmingCharacters(in: .whitespacesAndNewlines)
-                    newEntries[index].translation = translated
-                    newEntries[index].state = .done
-                    self.cache.set(translated, engine: engine, key: blocks[index].key)
-                    self.context.append(TranslationPair(source: inputs[offset], target: translated))
-                }
-                if self.context.count > 30 { self.context.removeFirst(self.context.count - 30) }
+                let results = try await self.translation.translate(blocks, settings: settings)
+                guard !Task.isCancelled else { return }
                 self.phase = .showing
-                self.showEntries(newEntries)
+                self.showEntries(zip(blocks, results).map {
+                    PiPEntry(original: $0.displayText, translation: $1, state: .done)
+                })
             } catch {
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled else { return }
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                for index in missing {
-                    newEntries[index].translation = "Lỗi: \(message)"
-                    newEntries[index].state = .error
-                }
                 self.phase = .error(message)
                 // Lỗi thì lần sau thử dịch lại.
                 self.displayedKeys = []
-                self.showEntries(newEntries)
+                self.showEntries(initialEntries.map { entry in
+                    guard entry.state == .pending else { return entry }
+                    return PiPEntry(original: entry.original, translation: "Lỗi: \(message)", state: .error)
+                })
             }
         }
     }

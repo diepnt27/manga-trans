@@ -24,6 +24,7 @@ App iOS dịch chữ trên màn hình (Anh → Việt) và hiện bản dịch t
 | `MangaTrans/Pipeline/` | Lọc, gom bóng thoại, điều phối dịch |
 | `MangaTrans/Translation/` | Bộ dịch Google miễn phí, Gemini, DeepSeek |
 | `MangaTrans/PiP/` | Cửa sổ nổi Picture-in-Picture |
+| `MangaTrans/Browser/` | Chế độ Trình duyệt (dịch trong app, không cần quay màn hình) |
 | `MangaTrans/Views/` | Giao diện SwiftUI |
 | `Shared/` | Code dùng chung cho app và extension |
 
@@ -95,6 +96,17 @@ Apple ID miễn phí: app hết hạn sau **7 ngày** và phải cài lại bằ
 - Nếu việc quét màn hình tự dừng sau vài giây (iOS giới hạn extension khoảng 50 MB RAM), hãy chuyển **Độ chính xác OCR** sang **Nhanh**. App cũng tự chuyển nếu phát hiện lần trước bị tắt giữa chừng.
 - Dịch chậm hoặc nhảy liên tục: tăng **Chờ đứng yên**.
 - Bị dịch cả thanh công cụ trình duyệt: tăng **Bỏ qua mép dưới**.
+
+## Chế độ Trình duyệt (không cần quay màn hình)
+
+Tab **Trình duyệt** là một trình duyệt web bên trong app, mở được mọi trang truyện. Mỗi khi bạn ngừng cuộn, app chụp vùng web đang xem, nhận dạng chữ rồi dịch. Không cần phát sóng màn hình, không có thanh đỏ, đỡ tốn pin hơn.
+
+- Nút **khung / bóng thoại** trên thanh công cụ đổi cách hiện bản dịch:
+  - **Khung dịch nổi**: khung ở trên trang, kéo phần đầu khung để di chuyển, bấm ⌃ để thu gọn.
+  - **Đè lên bóng thoại**: chữ Việt hiện đúng chỗ chữ Anh, tự ẩn khi đang cuộn.
+- Nút **☆** lưu dấu trang, nút **📖** mở danh sách dấu trang. App nhớ trang bạn xem lần cuối.
+- Nút **bong bóng chữ** bật/tắt dịch.
+- Đăng nhập, cookie và quảng cáo của trình duyệt trong app tách riêng với Safari. Cửa sổ quảng cáo tự bật lên sẽ bị chặn.
 
 ## Bộ dịch
 
