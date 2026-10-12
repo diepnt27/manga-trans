@@ -1,0 +1,66 @@
+# Sinh Xcode project bằng XcodeGen:  brew install xcodegen && xcodegen generate
+name: MangaTrans
+options:
+  bundleIdPrefix: com.diepnt
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Điền Team ID của bạn (Xcode → Settings → Accounts) hoặc chọn trong Signing & Capabilities.
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    # Đổi cả 3 giá trị dưới nếu bundle id đã bị người khác dùng.
+    APP_BUNDLE_ID: com.diepnt.mangatrans
+    APP_GROUP_ID: group.com.diepnt.mangatrans
+targets:
+  MangaTrans:
+    type: application
+    platform: iOS
+    sources:
+      - MangaTrans
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        INFOPLIST_FILE: MangaTrans/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MangaTrans/MangaTrans.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - target: BroadcastExt
+  BroadcastExt:
+    type: app-extension
+    platform: iOS
+    sources:
+      - BroadcastExt
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).BroadcastExt
+        INFOPLIST_FILE: BroadcastExt/Info.plist
+        CODE_SIGN_ENTITLEMENTS: BroadcastExt/BroadcastExt.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        APPLICATION_EXTENSION_API_ONLY: YES
+  MangaTransTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - MangaTransTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).tests
+    dependencies:
+      - target: MangaTrans
+schemes:
+  MangaTrans:
+    build:
+      targets:
+        MangaTrans: all
+        MangaTransTests: [test]
+    test:
+      targets:
+        - MangaTransTests

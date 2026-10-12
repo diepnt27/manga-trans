@@ -1,0 +1,9 @@
+# Xcode project được sinh bởi XcodeGen (xcodegen generate)
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+build/
+Payload/
+*.ipa
+.DS_Store

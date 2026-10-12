@@ -1,0 +1,92 @@
+name: iOS build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài XcodeGen
+        run: brew install xcodegen
+
+      - name: Sinh Xcode project
+        run: xcodegen generate
+
+      - name: Chạy unit test (simulator)
+        run: |
+          UDID=$(python3 - <<'PY'
+          import json, subprocess
+          devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
+          for runtime, items in sorted(devices.items(), reverse=True):
+              if "iOS" in runtime:
+                  for d in items:
+                      if d["name"].startswith("iPhone"):
+                          print(d["udid"]); raise SystemExit
+          PY
+          )
+          echo "Simulator: $UDID"
+          xcodebuild test \
+            -project MangaTrans.xcodeproj \
+            -scheme MangaTrans \
+            -destination "id=$UDID" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build IPA chưa ký
+        run: |
+          xcodebuild build \
+            -project MangaTrans.xcodeproj \
+            -scheme MangaTrans \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+          APP=build/Build/Products/Release-iphoneos/MangaTrans.app
+          GROUP=$(/usr/libexec/PlistBuddy -c "Print :AppGroupID" "$APP/Info.plist")
+          echo "App Group: $GROUP"
+          cat > ent.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.security.application-groups</key><array><string>$GROUP</string></array>
+          </dict></plist>
+          PLIST
+          # Ký ad-hoc kèm entitlements để công cụ sideload (Sideloadly, eSign...) biết app cần App Group.
+          codesign -f -s - --entitlements ent.plist "$APP/PlugIns/BroadcastExt.appex"
+          codesign -f -s - --entitlements ent.plist "$APP"
+
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry MangaTrans-unsigned.ipa Payload
+          cp MangaTrans-unsigned.ipa MangaTrans.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MangaTrans-unsigned-ipa
+          path: MangaTrans-unsigned.ipa
+
+      # Đăng IPA lên Releases (tag "latest") để tải thẳng trên iPhone, không cần đăng nhập GitHub.
+      - name: Đăng bản mới nhất lên Releases
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Bản mới nhất
+          prerelease: true
+          make_latest: false
+          body: "Bản build tự động từ commit ${{ github.sha }}. Tải file MangaTrans.ipa rồi cài bằng SideStore."
+          files: MangaTrans.ipa
