@@ -30,6 +30,8 @@ enum TranslatorFactory {
         switch settings.engine {
         case .google:
             return GoogleFreeTranslator()
+        case .googleCloud:
+            return GoogleCloudTranslator(apiKey: settings.googleCloudKey)
         case .gemini:
             return GeminiTranslator(apiKey: settings.geminiKey, model: settings.geminiModel, fastMode: settings.geminiFastMode)
         case .deepseek:

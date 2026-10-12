@@ -110,6 +110,11 @@ final class TranslatorParsingTests: XCTestCase {
         XCTAssertEqual(try GoogleFreeTranslator.parse(Data(json.utf8)), "Tôi không hiểu bạn nói gì.")
     }
 
+    func testGoogleCloudResponse() throws {
+        let json = #"{"data":{"translations":[{"translatedText":"Một","detectedSourceLanguage":"en"},{"translatedText":"Hai"}]}}"#
+        XCTAssertEqual(try GoogleCloudTranslator.parse(Data(json.utf8)), ["Một", "Hai"])
+    }
+
     func testLLMJsonWithCodeFence() throws {
         let content = "```json\n{\"translations\": [\"Một\", \"Hai\"]}\n```"
         XCTAssertEqual(try MangaPrompt.parse(content, expected: 2), ["Một", "Hai"])

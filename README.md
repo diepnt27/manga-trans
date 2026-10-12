@@ -120,6 +120,7 @@ Tab **Trình duyệt** là một trình duyệt web bên trong app, mở đượ
 | Bộ dịch | Key | Ghi chú |
 |---|---|---|
 | Google (miễn phí) | Không cần | Endpoint web không chính thức, nhanh, có thể bị giới hạn nếu dùng quá nhiều |
+| Google Cloud | [console.cloud.google.com](https://console.cloud.google.com/apis/library/translate.googleapis.com) | API chính thức (Basic v2), miễn phí 500.000 ký tự/tháng, cần gắn thẻ thanh toán |
 | Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Mặc định `gemini-3.6-flash`; đổi model được trong Cài đặt |
 | DeepSeek | [platform.deepseek.com](https://platform.deepseek.com) | Mặc định `deepseek-v4-flash` |
 

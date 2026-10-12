@@ -2,13 +2,14 @@ import Foundation
 import CoreGraphics
 
 enum TranslatorEngine: String, CaseIterable, Identifiable {
-    case google, gemini, deepseek
+    case google, googleCloud, gemini, deepseek
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .google: return "Google (miễn phí)"
+        case .googleCloud: return "Google Cloud (key)"
         case .gemini: return "Gemini"
         case .deepseek: return "DeepSeek"
         }
@@ -58,6 +59,7 @@ enum SettingsKey {
     static let geminiModel = "geminiModel"
     static let geminiFastMode = "geminiFastMode"
     static let deepseekKey = "deepseekKey"
+    static let googleCloudKey = "googleCloudKey"
     static let deepseekModel = "deepseekModel"
     static let windowSize = "windowSize"
     static let showOriginal = "showOriginal"
@@ -83,6 +85,7 @@ struct AppSettings {
     var geminiModel: String
     var geminiFastMode: Bool
     var deepseekKey: String
+    var googleCloudKey: String
     var deepseekModel: String
     var windowSize: WindowSize
     var showOriginal: Bool
@@ -128,6 +131,7 @@ struct AppSettings {
             geminiModel: geminiModel.isEmpty ? defaultGeminiModel : geminiModel,
             geminiFastMode: d.bool(forKey: SettingsKey.geminiFastMode),
             deepseekKey: string(SettingsKey.deepseekKey),
+            googleCloudKey: string(SettingsKey.googleCloudKey),
             deepseekModel: deepseekModel.isEmpty ? defaultDeepSeekModel : deepseekModel,
             windowSize: WindowSize(rawValue: string(SettingsKey.windowSize)) ?? .normal,
             showOriginal: d.bool(forKey: SettingsKey.showOriginal),

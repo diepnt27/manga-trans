@@ -44,3 +44,34 @@ struct GoogleFreeTranslator: Translator {
         return text
     }
 }
+
+/// Google Cloud Translation API (bản Basic v2) với API key chính thức — ổn định, miễn phí 500.000 ký tự/tháng.
+struct GoogleCloudTranslator: Translator {
+    let apiKey: String
+    var source = "en"
+    var target = "vi"
+
+    func translate(_ texts: [String], context: [TranslationPair]) async throws -> [String] {
+        guard !apiKey.isEmpty else { throw TranslatorError.missingAPIKey("Google Cloud") }
+        guard !texts.isEmpty else { return [] }
+        var components = URLComponents(string: "https://translation.googleapis.com/language/translate/v2")!
+        components.queryItems = [URLQueryItem(name: "key", value: apiKey)]
+        let body: [String: Any] = ["q": texts, "source": source, "target": target, "format": "text"]
+        let data = try await HTTP.postJSON(components.url!, body: body)
+        let results = try Self.parse(data)
+        guard results.count == texts.count else { throw TranslatorError.invalidResponse }
+        return results
+    }
+
+    /// Phản hồi dạng `{"data": {"translations": [{"translatedText": "..."}]}}`.
+    static func parse(_ data: Data) throws -> [String] {
+        struct Response: Decodable {
+            struct Body: Decodable {
+                struct Item: Decodable { let translatedText: String }
+                let translations: [Item]
+            }
+            let data: Body
+        }
+        return try JSONDecoder().decode(Response.self, from: data).data.translations.map(\.translatedText)
+    }
+}

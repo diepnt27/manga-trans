@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.geminiModel, store: AppGroup.defaults) private var geminiModel = AppSettings.defaultGeminiModel
     @AppStorage(SettingsKey.geminiFastMode, store: AppGroup.defaults) private var geminiFastMode = true
     @AppStorage(SettingsKey.deepseekKey, store: AppGroup.defaults) private var deepseekKey = ""
+    @AppStorage(SettingsKey.googleCloudKey, store: AppGroup.defaults) private var googleCloudKey = ""
     @AppStorage(SettingsKey.deepseekModel, store: AppGroup.defaults) private var deepseekModel = AppSettings.defaultDeepSeekModel
     @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .normal
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
@@ -50,7 +51,17 @@ struct SettingsView: View {
                 } header: {
                     Text("Bộ dịch")
                 } footer: {
-                    Text("Google miễn phí, không cần key. Gemini/DeepSeek dịch tự nhiên hơn (xưng hô theo ngữ cảnh) nhưng cần API key.")
+                    Text("Google miễn phí không cần key nhưng có thể bị chặn. Google Cloud dùng key chính thức, ổn định hơn. Gemini/DeepSeek dịch tự nhiên hơn (xưng hô theo ngữ cảnh).")
+                }
+
+                Section {
+                    SecureField("API key", text: $googleCloudKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Google Cloud Translation")
+                } footer: {
+                    Text("Tạo key tại console.cloud.google.com: bật \"Cloud Translation API\" → APIs & Services → Credentials → Create API key. Miễn phí 500.000 ký tự mỗi tháng (cần gắn thẻ thanh toán).")
                 }
 
                 Section {
