@@ -12,6 +12,11 @@ defaults:
 permissions:
   contents: write
 
+# Push mới huỷ bản build cũ đang chạy — tránh bản cũ xong sau ghi đè file IPA mới trên Releases.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-15
