@@ -54,6 +54,13 @@ Mỗi lần push, workflow `.github/workflows/ios.yml` chạy unit test rồi bu
 
 Sau đó cài bằng một trong các cách dưới. App tự đọc tên App Group thật từ chữ ký, nên công cụ sideload có đổi tên group thì app vẫn chạy.
 
+Có 2 bản:
+
+| File | Có gì | Số App ID khi sideload bằng Apple ID miễn phí |
+|---|---|---|
+| `MangaTrans.ipa` | Dịch màn hình (mọi app) + Trình duyệt | 2 |
+| `MangaTrans-Lite.ipa` | Chỉ Trình duyệt | 1 |
+
 Bản mới nhất luôn có ở [Releases → latest](https://github.com/diepnt27/manga-trans/releases/tag/latest) (file `MangaTrans.ipa`), tải thẳng trên iPhone được.
 
 #### SideStore (miễn phí, gia hạn ngay trên iPhone — khuyên dùng)

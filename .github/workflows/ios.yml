@@ -74,10 +74,19 @@ jobs:
           zip -qry MangaTrans-unsigned.ipa Payload
           cp MangaTrans-unsigned.ipa MangaTrans.ipa
 
+          # Bản Lite: bỏ Broadcast Extension (chỉ còn chế độ Trình duyệt) → tốn 1 App ID thay vì 2.
+          mkdir -p lite/Payload
+          cp -R "$APP" lite/Payload/
+          rm -rf lite/Payload/MangaTrans.app/PlugIns
+          codesign -f -s - lite/Payload/MangaTrans.app
+          (cd lite && zip -qry ../MangaTrans-Lite.ipa Payload)
+
       - uses: actions/upload-artifact@v4
         with:
           name: MangaTrans-unsigned-ipa
-          path: MangaTrans-unsigned.ipa
+          path: |
+            MangaTrans-unsigned.ipa
+            MangaTrans-Lite.ipa
 
       # Đăng IPA lên Releases (tag "latest") để tải thẳng trên iPhone, không cần đăng nhập GitHub.
       - name: Đăng bản mới nhất lên Releases
@@ -88,5 +97,10 @@ jobs:
           name: Bản mới nhất
           prerelease: true
           make_latest: false
-          body: "Bản build tự động từ commit ${{ github.sha }}. Tải file MangaTrans.ipa rồi cài bằng SideStore."
-          files: MangaTrans.ipa
+          body: |
+            Bản build tự động từ commit ${{ github.sha }}.
+            - MangaTrans.ipa: bản đầy đủ (dịch màn hình + Trình duyệt), tốn 2 App ID.
+            - MangaTrans-Lite.ipa: chỉ có Trình duyệt, tốn 1 App ID.
+          files: |
+            MangaTrans.ipa
+            MangaTrans-Lite.ipa

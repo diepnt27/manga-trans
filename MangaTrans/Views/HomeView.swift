@@ -17,16 +17,21 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     languageBar
-                    preview
-                    optionRows
-                    statusView
-                    startButton
-                    warnings
-                    guide
-                    // Nút hệ thống "Bắt đầu phát sóng" — ẩn, được bấm bằng code.
-                    BroadcastPickerHost()
-                        .frame(width: 1, height: 1)
-                        .opacity(0.02)
+                    if AppEdition.hasScreenTranslation {
+                        preview
+                        optionRows
+                        statusView
+                        startButton
+                        warnings
+                        guide
+                        // Nút hệ thống "Bắt đầu phát sóng" — ẩn, được bấm bằng code.
+                        BroadcastPickerHost()
+                            .frame(width: 1, height: 1)
+                            .opacity(0.02)
+                    } else {
+                        liteNotice
+                        optionRows
+                    }
                 }
                 .padding(16)
             }
@@ -172,6 +177,19 @@ struct HomeView: View {
             .font(.footnote)
             .foregroundStyle(.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var liteNotice: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Bản Lite").font(.headline)
+            Text("Bản này chỉ có chế độ **Trình duyệt** (không quay màn hình) nên chỉ tốn 1 App ID khi sideload. Mở tab **Trình duyệt** để đọc truyện.")
+            Text("Muốn dịch cả trong app khác (Safari, app đọc truyện), hãy cài bản đầy đủ MangaTrans.ipa.")
+                .foregroundStyle(.secondary)
+        }
+        .font(.footnote)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(white: 0.08), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var guide: some View {
