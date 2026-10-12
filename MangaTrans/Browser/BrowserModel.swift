@@ -339,7 +339,15 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     private func show(_ blocks: [TextBlock], _ results: [(String, PiPEntry.State)], generation scanGeneration: Int) {
-        entries = zip(blocks, results).map { PiPEntry(original: $0.displayText, translation: $1.0, state: $1.1) }
+        // Khung dịch: chỉ các bóng thoại trong vùng đọc, vừa đủ độ dài. Kiểu đè lên bóng thoại: hiện tất cả.
+        let settings = AppSettings.load()
+        let focused = Set(FocusSelector.select(blocks, zone: settings.readingZone,
+                                               maxCharacters: settings.windowSize.maxCharacters).map(\.key))
+        let panelEntries = zip(blocks, results)
+            .filter { focused.contains($0.0.key) }
+            .map { PiPEntry(original: $0.displayText, translation: $1.0, state: $1.1) }
+        // Vùng đọc trống (ví dụ chỉ có chữ ở cuối màn hình) → giữ bản dịch đang hiện.
+        if !panelEntries.isEmpty { entries = panelEntries }
         // Vị trí chỉ còn đúng nếu chưa cuộn.
         guard scanGeneration == generation else { return }
         overlays = zip(blocks, results).enumerated().map { index, item in

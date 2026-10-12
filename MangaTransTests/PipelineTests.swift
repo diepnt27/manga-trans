@@ -282,3 +282,23 @@ final class TranslationServiceTests: XCTestCase {
         XCTAssertEqual(fake.requests.count, 2)
     }
 }
+
+final class FocusSelectorTests: XCTestCase {
+    private func block(_ text: String, y: Double) -> TextBlock {
+        TextGrouper.group([OCRLine(text: text, confidence: 1, x: 0.1, y: y, w: 0.5, h: 0.02)],
+                          imageSize: CGSize(width: 1000, height: 2000))[0]
+    }
+
+    func testTopZoneShowsUpperBubblesOnly() {
+        let blocks = [block("FIRST", y: 0.2), block("SECOND", y: 0.45), block("BOTTOM", y: 0.85)]
+        XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 220).map(\.displayText), ["FIRST", "SECOND"])
+        XCTAssertEqual(FocusSelector.select(blocks, zone: .full, maxCharacters: 220).count, 3)
+    }
+
+    func testStopsWhenTooLongButKeepsAtLeastOne() {
+        let long = String(repeating: "WORD ", count: 40) // 200 ký tự
+        let blocks = [block(long, y: 0.1), block("NEXT ONE", y: 0.3)]
+        XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 120).count, 1)
+        XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 400).count, 2)
+    }
+}

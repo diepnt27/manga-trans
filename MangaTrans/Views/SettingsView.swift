@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.deepseekModel, store: AppGroup.defaults) private var deepseekModel = AppSettings.defaultDeepSeekModel
     @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .normal
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
+    @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .top
     @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 1.0
     @AppStorage(SettingsKey.ocrAccuracy, store: AppGroup.defaults) private var ocrAccuracy: OCRAccuracy = .accurate
     @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.5
@@ -92,12 +93,19 @@ struct SettingsView: View {
                     Text("Lấy key tại platform.deepseek.com. Mặc định: \(AppSettings.defaultDeepSeekModel).")
                 }
 
-                Section("Cửa sổ nổi") {
+                Section {
                     Picker("Cỡ cửa sổ", selection: $windowSize) {
                         ForEach(WindowSize.allCases) { Text($0.title).tag($0) }
                     }
+                    Picker("Vùng đọc", selection: $readingZone) {
+                        ForEach(ReadingZone.allCases) { Text($0.title).tag($0) }
+                    }
                     Toggle("Hiện câu gốc", isOn: $showOriginal)
                     slider("Cỡ chữ", value: $fontScale, range: 0.6...1.6, step: 0.1, format: "×%.1f")
+                } header: {
+                    Text("Cửa sổ dịch")
+                } footer: {
+                    Text("Vùng đọc: chỉ hiện bóng thoại trong vùng này, mỗi lần một đoạn vừa cửa sổ (Nhỏ ~120, Vừa ~220, Lớn ~400 ký tự). Trang nhiều chữ thì cuộn xuống để xem đoạn tiếp — bản dịch đã được chuẩn bị sẵn.")
                 }
 
                 Section {

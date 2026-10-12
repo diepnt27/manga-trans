@@ -129,16 +129,21 @@ final class TranslationCoordinator: ObservableObject {
         filter.marginBottom = settings.marginBottom
 
         let lines = filter.filter(frame.lines)
-        let blocks = TextGrouper.group(lines, imageSize: CGSize(width: frame.width, height: frame.height))
+        let allBlocks = TextGrouper.group(lines, imageSize: CGSize(width: frame.width, height: frame.height))
             .filter { TextNormalizer.letterCount($0.displayText) >= 2 && !filter.isEchoOfTranslation($0) }
-        let keys = blocks.map(\.key)
 
         // Dịch trước: bóng thoại có ở 2 lần quét liên tiếp (kể cả khi đang cuộn) thì dịch sẵn vào cache,
         // dừng lại là hiện ngay. Bóng thoại bị cắt ở mép màn hình đổi chữ liên tục nên không bị dịch nhầm.
+        // Dịch cả bóng thoại ngoài vùng đọc để cuộn tới là có ngay.
         if settings.prefetchWhileScrolling {
-            translation.prefetch(blocks.filter { previousScanKeys.contains($0.key) }, settings: settings)
+            translation.prefetch(allBlocks.filter { previousScanKeys.contains($0.key) }, settings: settings)
         }
-        previousScanKeys = Set(keys)
+        previousScanKeys = Set(allBlocks.map(\.key))
+
+        // Chỉ hiện các bóng thoại trong vùng đọc, vừa đủ độ dài cửa sổ.
+        let blocks = FocusSelector.select(allBlocks, zone: settings.readingZone,
+                                          maxCharacters: settings.windowSize.maxCharacters)
+        let keys = blocks.map(\.key)
 
         // Không có chữ, hoặc chỉ còn các bóng thoại đang hiển thị → giữ nguyên.
         if keys.isEmpty || Set(keys).isSubset(of: Set(displayedKeys)) {

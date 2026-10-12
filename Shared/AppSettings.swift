@@ -31,11 +31,44 @@ enum WindowSize: String, CaseIterable, Identifiable {
 
     /// Kích thước khung hình (pixel) vẽ cho cửa sổ nổi.
     /// Tỉ lệ khung hình quyết định hình dạng cửa sổ Picture-in-Picture.
+    /// Tổng số ký tự tối đa hiện trong cửa sổ — quá thì để dành cho lần cuộn sau.
+    var maxCharacters: Int {
+        switch self {
+        case .small: return 120
+        case .normal: return 220
+        case .large: return 400
+        }
+    }
+
     var canvasSize: CGSize {
         switch self {
         case .small: return CGSize(width: 1080, height: 360)
         case .normal: return CGSize(width: 1080, height: 540)
         case .large: return CGSize(width: 1080, height: 810)
+        }
+    }
+}
+
+/// Vùng màn hình lấy bóng thoại để hiện trong cửa sổ dịch — giữ bản dịch ngắn, cuộn tới đâu dịch tới đó.
+enum ReadingZone: String, CaseIterable, Identifiable {
+    case top, middle, full
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .top: return "Nửa trên"
+        case .middle: return "Giữa màn hình"
+        case .full: return "Cả màn hình"
+        }
+    }
+
+    /// Khoảng theo chiều dọc (0 = mép trên, 1 = mép dưới) mà tâm bóng thoại phải nằm trong.
+    var verticalRange: ClosedRange<Double> {
+        switch self {
+        case .top: return 0...0.6
+        case .middle: return 0.2...0.8
+        case .full: return 0...1
         }
     }
 }
@@ -70,6 +103,7 @@ enum SettingsKey {
     static let marginTop = "marginTop"
     static let marginBottom = "marginBottom"
     static let prefetchWhileScrolling = "prefetchWhileScrolling"
+    static let readingZone = "readingZone"
 
     // Trạng thái nội bộ (extension ghi)
     static let broadcastActive = "broadcastActive"
@@ -101,6 +135,7 @@ struct AppSettings {
     var marginBottom: Double
     /// Dịch sẵn các bóng thoại khi đang cuộn để lúc dừng hiện ngay.
     var prefetchWhileScrolling: Bool
+    var readingZone: ReadingZone
 
     static let defaultValues: [String: Any] = [
         SettingsKey.engine: TranslatorEngine.google.rawValue,
@@ -113,6 +148,7 @@ struct AppSettings {
         SettingsKey.scanInterval: 0.5,
         SettingsKey.stableDelay: 0.4,
         SettingsKey.prefetchWhileScrolling: true,
+        SettingsKey.readingZone: ReadingZone.top.rawValue,
         SettingsKey.ocrAccuracy: OCRAccuracy.accurate.rawValue,
         SettingsKey.marginTop: 0.05,
         SettingsKey.marginBottom: 0.08,
@@ -145,7 +181,8 @@ struct AppSettings {
             ocrAccuracy: OCRAccuracy(rawValue: string(SettingsKey.ocrAccuracy)) ?? .accurate,
             marginTop: d.double(forKey: SettingsKey.marginTop),
             marginBottom: d.double(forKey: SettingsKey.marginBottom),
-            prefetchWhileScrolling: d.bool(forKey: SettingsKey.prefetchWhileScrolling)
+            prefetchWhileScrolling: d.bool(forKey: SettingsKey.prefetchWhileScrolling),
+            readingZone: ReadingZone(rawValue: string(SettingsKey.readingZone)) ?? .top
         )
     }
 }
