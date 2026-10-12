@@ -4,24 +4,26 @@ import ImageIO
 
 /// Nhận dạng chữ tiếng Anh bằng Vision. Dùng chung cho Broadcast Extension và chế độ Trình duyệt.
 enum TextRecognizer {
-    static func recognize(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, accuracy: OCRAccuracy) throws -> [OCRLine] {
-        let request = makeRequest(accuracy: accuracy)
+    static func recognize(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, accuracy: OCRAccuracy,
+                          minimumTextHeight: Float = 0.008) throws -> [OCRLine] {
+        let request = makeRequest(accuracy: accuracy, minimumTextHeight: minimumTextHeight)
         try VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:]).perform([request])
         return lines(from: request)
     }
 
-    static func recognize(cgImage: CGImage, accuracy: OCRAccuracy) throws -> [OCRLine] {
-        let request = makeRequest(accuracy: accuracy)
+    /// `minimumTextHeight`: chiều cao chữ nhỏ nhất (tỉ lệ theo chiều cao ảnh) — nhỏ hơn thì bắt được chữ nhỏ nhưng chậm hơn.
+    static func recognize(cgImage: CGImage, accuracy: OCRAccuracy, minimumTextHeight: Float = 0.008) throws -> [OCRLine] {
+        let request = makeRequest(accuracy: accuracy, minimumTextHeight: minimumTextHeight)
         try VNImageRequestHandler(cgImage: cgImage, options: [:]).perform([request])
         return lines(from: request)
     }
 
-    private static func makeRequest(accuracy: OCRAccuracy) -> VNRecognizeTextRequest {
+    private static func makeRequest(accuracy: OCRAccuracy, minimumTextHeight: Float) -> VNRecognizeTextRequest {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = accuracy == .fast ? .fast : .accurate
         request.recognitionLanguages = ["en-US"]
         request.usesLanguageCorrection = true
-        request.minimumTextHeight = 0.008
+        request.minimumTextHeight = minimumTextHeight
         return request
     }
 

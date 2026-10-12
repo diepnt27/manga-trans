@@ -14,8 +14,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
     @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 1.0
     @AppStorage(SettingsKey.ocrAccuracy, store: AppGroup.defaults) private var ocrAccuracy: OCRAccuracy = .accurate
-    @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.6
-    @AppStorage(SettingsKey.stableDelay, store: AppGroup.defaults) private var stableDelay = 0.6
+    @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.5
+    @AppStorage(SettingsKey.stableDelay, store: AppGroup.defaults) private var stableDelay = 0.4
+    @AppStorage(SettingsKey.prefetchWhileScrolling, store: AppGroup.defaults) private var prefetchWhileScrolling = true
     @AppStorage(SettingsKey.marginTop, store: AppGroup.defaults) private var marginTop = 0.05
     @AppStorage(SettingsKey.marginBottom, store: AppGroup.defaults) private var marginBottom = 0.08
 
@@ -103,6 +104,7 @@ struct SettingsView: View {
                     Picker("Độ chính xác OCR", selection: $ocrAccuracy) {
                         ForEach(OCRAccuracy.allCases) { Text($0.title).tag($0) }
                     }
+                    Toggle("Dịch trước khi đang cuộn", isOn: $prefetchWhileScrolling)
                     slider("Quét mỗi", value: $scanInterval, range: 0.3...2.0, step: 0.1, format: "%.1f giây")
                     slider("Chờ đứng yên", value: $stableDelay, range: 0.2...2.0, step: 0.1, format: "%.1f giây")
                     slider("Bỏ qua mép trên", value: $marginTop, range: 0...0.25, step: 0.01, format: "%.0f%%", scale: 100)
@@ -110,7 +112,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Nhận dạng chữ")
                 } footer: {
-                    Text("Nếu việc quét màn hình tự tắt, hãy chọn OCR \"Nhanh\". \"Chờ đứng yên\": thời gian màn hình phải dừng cuộn trước khi dịch. Bỏ qua mép trên/dưới để không dịch thanh trạng thái và thanh công cụ trình duyệt.")
+                    Text("\"Dịch trước khi đang cuộn\": bóng thoại được dịch sẵn lúc bạn cuộn chậm, dừng lại là hiện ngay (tốn thêm lượt gọi API cho đoạn chỉ lướt qua). Nếu việc quét màn hình tự tắt, hãy chọn OCR \"Nhanh\". \"Chờ đứng yên\": thời gian màn hình phải dừng cuộn trước khi dịch. Bỏ qua mép trên/dưới để không dịch thanh trạng thái và thanh công cụ trình duyệt.")
                 }
             }
             .navigationTitle("Cài đặt")

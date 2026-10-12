@@ -62,9 +62,13 @@ final class BrowserModel: NSObject, ObservableObject {
     private var generation = 0
     private var isScanning = false
     private var needsRescan = false
+    private var rescanFollowUp = false
     private var lastKeys: [String] = []
     private var lastGeneration = -1
-    private var stableDelay = 0.5
+    private var stableDelay = 0.4
+    private var prefetchEnabled = true
+    private var lastPrefetchScan = Date.distantPast
+    private var previousPrefetchKeys: Set<String> = []
 
     private let lastURLKey = "browserLastURL"
     private let bookmarksKey = "browserBookmarks"
@@ -188,13 +192,22 @@ final class BrowserModel: NSObject, ObservableObject {
         if !isScrolling {
             isScrolling = true
             overlays = []
-            stableDelay = max(0.25, AppSettings.load().stableDelay)
+            let settings = AppSettings.load()
+            stableDelay = max(0.25, settings.stableDelay)
+            prefetchEnabled = settings.prefetchWhileScrolling
         }
         followUpTimer?.invalidate()
         scheduleScan(after: stableDelay)
+        // Đang cuộn: cứ ~0.8 giây quét một lần để dịch sẵn, dừng lại là hiện ngay.
+        if prefetchEnabled, !isScanning, Date().timeIntervalSince(lastPrefetchScan) > 0.8 {
+            prefetchScan()
+        }
     }
 
     // MARK: - Quét & dịch
+
+    /// Chữ nhỏ nhất cần bắt (tỉ lệ theo chiều cao khung web) — đủ nhỏ cho khung lời dẫn, chú thích.
+    private static let minimumTextHeight: Float = 0.005
 
     private func scheduleScan(after delay: TimeInterval) {
         scanTimer?.invalidate()
@@ -210,11 +223,35 @@ final class BrowserModel: NSObject, ObservableObject {
         guard isTranslationEnabled, hasPage, webView.bounds.width > 0 else { return }
         if isScanning {
             needsRescan = true
+            rescanFollowUp = rescanFollowUp || followUp
             return
         }
-        isScanning = true
         let scanGeneration = generation
-        webView.takeSnapshot(with: WKSnapshotConfiguration()) { [weak self] image, _ in
+        captureLines(afterScreenUpdates: true) { [weak self] lines, size in
+            self?.process(lines, imageSize: size, generation: scanGeneration, followUp: followUp)
+        }
+    }
+
+    /// Quét lúc đang cuộn: chỉ dịch sẵn vào cache, không hiển thị.
+    private func prefetchScan() {
+        guard isTranslationEnabled, hasPage, webView.bounds.width > 0 else { return }
+        lastPrefetchScan = Date()
+        captureLines(afterScreenUpdates: false) { [weak self] lines, size in
+            guard let self else { return }
+            let blocks = Self.makeBlocks(lines, imageSize: size)
+            // Chỉ dịch bóng thoại thấy ở 2 lần quét liên tiếp — bỏ qua đoạn lướt nhanh và bóng thoại bị cắt ở mép.
+            self.translation.prefetch(blocks.filter { self.previousPrefetchKeys.contains($0.key) }, settings: AppSettings.load())
+            self.previousPrefetchKeys = Set(blocks.map(\.key))
+        }
+    }
+
+    /// Chụp vùng web đang hiển thị rồi nhận dạng chữ (chạy nền).
+    private func captureLines(afterScreenUpdates: Bool, _ handler: @escaping ([OCRLine], CGSize) -> Void) {
+        isScanning = true
+        let configuration = WKSnapshotConfiguration()
+        configuration.afterScreenUpdates = afterScreenUpdates
+        let minimumTextHeight = Self.minimumTextHeight
+        webView.takeSnapshot(with: configuration) { [weak self] image, _ in
             Task { @MainActor in
                 guard let self else { return }
                 guard let cgImage = image?.cgImage else {
@@ -223,19 +260,27 @@ final class BrowserModel: NSObject, ObservableObject {
                 }
                 let size = CGSize(width: cgImage.width, height: cgImage.height)
                 let lines = await Task.detached(priority: .userInitiated) {
-                    (try? TextRecognizer.recognize(cgImage: cgImage, accuracy: .accurate)) ?? []
+                    (try? TextRecognizer.recognize(cgImage: cgImage, accuracy: .accurate,
+                                                   minimumTextHeight: minimumTextHeight)) ?? []
                 }.value
-                self.process(lines, imageSize: size, generation: scanGeneration, followUp: followUp)
+                handler(lines, size)
                 self.finishScan()
             }
         }
+    }
+
+    private static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize) -> [TextBlock] {
+        TextGrouper.group(lines.filter { $0.confidence >= 0.3 }, imageSize: imageSize)
+            .filter { TextNormalizer.letterCount($0.displayText) >= 2 }
     }
 
     private func finishScan() {
         isScanning = false
         if needsRescan {
             needsRescan = false
-            scan(followUp: false)
+            let followUp = rescanFollowUp
+            rescanFollowUp = false
+            scan(followUp: followUp)
         }
     }
 
@@ -251,8 +296,7 @@ final class BrowserModel: NSObject, ObservableObject {
             }
         }
 
-        let blocks = TextGrouper.group(lines.filter { $0.confidence >= 0.3 }, imageSize: imageSize)
-            .filter { TextNormalizer.letterCount($0.displayText) >= 2 }
+        let blocks = Self.makeBlocks(lines, imageSize: imageSize)
         let keys = blocks.map(\.key)
         if keys == lastKeys && scanGeneration == lastGeneration { return }
         lastKeys = keys

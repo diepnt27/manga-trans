@@ -236,3 +236,49 @@ final class TextRecognizerTests: XCTestCase {
         XCTAssertEqual(blocks.last?.key, "where are you going")
     }
 }
+
+/// Bộ dịch giả: đếm số lần gọi, trả về "VI:" + câu gốc sau một chút trễ.
+private final class CountingTranslator: Translator {
+    private let lock = NSLock()
+    private var log: [[String]] = []
+    var requests: [[String]] {
+        lock.lock(); defer { lock.unlock() }
+        return log
+    }
+
+    func translate(_ texts: [String], context: [TranslationPair]) async throws -> [String] {
+        lock.lock()
+        log.append(texts)
+        lock.unlock()
+        try await Task.sleep(nanoseconds: 50_000_000)
+        return texts.map { "VI:" + $0 }
+    }
+}
+
+@MainActor
+final class TranslationServiceTests: XCTestCase {
+    private func block(_ text: String) -> TextBlock {
+        TextGrouper.group([OCRLine(text: text, confidence: 1, x: 0.1, y: 0.1, w: 0.5, h: 0.02)],
+                          imageSize: CGSize(width: 1000, height: 2000))[0]
+    }
+
+    func testPrefetchedBubbleIsNotTranslatedTwice() async throws {
+        let fake = CountingTranslator()
+        let service = TranslationService(makeTranslator: { _ in fake })
+        let settings = AppSettings.load(UserDefaults(suiteName: "tests")!)
+        let a = block("HELLO THERE"), b = block("WHERE ARE YOU")
+
+        // Đang cuộn: dịch trước A. Dừng lại: cần A và B ngay lúc A còn đang dịch.
+        service.prefetch([a], settings: settings)
+        await Task.yield()
+        let results = try await service.translate([a, b], settings: settings)
+
+        XCTAssertEqual(results, ["VI:Hello there", "VI:Where are you"])
+        // Mỗi câu chỉ gửi đi đúng 1 lần.
+        XCTAssertEqual(fake.requests.flatMap { $0 }.sorted(), ["Hello there", "Where are you"])
+
+        // Lần sau lấy từ cache, không gọi bộ dịch nữa.
+        _ = try await service.translate([b, a], settings: settings)
+        XCTAssertEqual(fake.requests.count, 2)
+    }
+}

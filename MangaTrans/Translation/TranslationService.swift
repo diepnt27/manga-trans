@@ -5,26 +5,77 @@ import Foundation
 final class TranslationService {
     private var cache = TranslationCache()
     private var context: [TranslationPair] = []
+    /// Bóng thoại đang được dịch (khoá "engine|key") — lần gọi sau chờ kết quả này thay vì gọi API lần nữa.
+    private var inFlight: [String: Task<String, Error>] = [:]
+    private let makeTranslator: (AppSettings) -> any Translator
+
+    init(makeTranslator: @escaping (AppSettings) -> any Translator = TranslatorFactory.make) {
+        self.makeTranslator = makeTranslator
+    }
 
     func cached(_ block: TextBlock, engine: TranslatorEngine) -> String? {
         cache.value(engine: engine, key: block.key)
     }
 
+    /// Dịch sẵn vào cache (khi người dùng đang cuộn) để lúc dừng lại hiện ngay. Lỗi thì bỏ qua.
+    func prefetch(_ blocks: [TextBlock], settings: AppSettings) {
+        let engine = settings.engine
+        let missing = blocks.filter {
+            cache.value(engine: engine, key: $0.key) == nil && inFlight[Self.flightKey(engine, $0.key)] == nil
+        }
+        guard !missing.isEmpty else { return }
+        Task { _ = try? await self.translate(missing, settings: settings) }
+    }
+
     /// Bản dịch cho mọi bóng thoại theo đúng thứ tự; chỉ gọi bộ dịch cho những bóng chưa có trong cache.
     func translate(_ blocks: [TextBlock], settings: AppSettings) async throws -> [String] {
         let engine = settings.engine
-        var seen = Set<String>()
-        let missing = blocks.filter { cache.value(engine: engine, key: $0.key) == nil && seen.insert($0.key).inserted }
-        if !missing.isEmpty {
-            let inputs = missing.map(\.translationInput)
-            let results = try await TranslatorFactory.make(settings).translate(inputs, context: Array(context.suffix(8)))
-            for (block, result) in zip(missing, results) {
-                let translated = result.trimmingCharacters(in: .whitespacesAndNewlines)
-                cache.set(translated, engine: engine, key: block.key)
-                context.append(TranslationPair(source: block.translationInput, target: translated))
-            }
-            if context.count > 30 { context.removeFirst(context.count - 30) }
+
+        var newBlocks: [TextBlock] = []
+        for block in blocks where cache.value(engine: engine, key: block.key) == nil
+            && inFlight[Self.flightKey(engine, block.key)] == nil
+            && !newBlocks.contains(where: { $0.key == block.key }) {
+            newBlocks.append(block)
         }
-        return blocks.map { cache.value(engine: engine, key: $0.key) ?? "" }
+
+        if !newBlocks.isEmpty {
+            let inputs = newBlocks.map(\.translationInput)
+            let translator = makeTranslator(settings)
+            let recentContext = Array(context.suffix(8))
+            // Task riêng: người gọi bị huỷ (do cuộn tiếp) thì bản dịch vẫn chạy xong và vào cache.
+            let batch = Task { try await translator.translate(inputs, context: recentContext) }
+            for (index, block) in newBlocks.enumerated() {
+                inFlight[Self.flightKey(engine, block.key)] = Task { try await batch.value[index] }
+            }
+            do {
+                let results = try await batch.value
+                for (block, result) in zip(newBlocks, results) {
+                    let translated = result.trimmingCharacters(in: .whitespacesAndNewlines)
+                    cache.set(translated, engine: engine, key: block.key)
+                    context.append(TranslationPair(source: block.translationInput, target: translated))
+                    inFlight[Self.flightKey(engine, block.key)] = nil
+                }
+                if context.count > 30 { context.removeFirst(context.count - 30) }
+            } catch {
+                newBlocks.forEach { inFlight[Self.flightKey(engine, $0.key)] = nil }
+                throw error
+            }
+        }
+
+        var results: [String] = []
+        for block in blocks {
+            if let cached = cache.value(engine: engine, key: block.key) {
+                results.append(cached)
+            } else if let pending = inFlight[Self.flightKey(engine, block.key)] {
+                results.append(try await pending.value)
+            } else {
+                results.append("")
+            }
+        }
+        return results
+    }
+
+    private static func flightKey(_ engine: TranslatorEngine, _ key: String) -> String {
+        engine.rawValue + "|" + key
     }
 }

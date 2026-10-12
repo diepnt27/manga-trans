@@ -27,6 +27,7 @@ final class TranslationCoordinator: ObservableObject {
     private var filter = ScreenFilter()
     private var displayedKeys: [String] = []
     private var pendingKeys: [String] = []
+    private var previousScanKeys: Set<String> = []
     private var pendingBlocks: [TextBlock] = []
     private var debounceTask: Task<Void, Never>?
     private var translateTask: Task<Void, Never>?
@@ -93,6 +94,7 @@ final class TranslationCoordinator: ObservableObject {
         phase = .waiting
         displayedKeys = []
         pendingKeys = []
+        previousScanKeys = []
         lastFrameTimestamp = 0
         filter.reset()
         entries = []
@@ -130,6 +132,13 @@ final class TranslationCoordinator: ObservableObject {
         let blocks = TextGrouper.group(lines, imageSize: CGSize(width: frame.width, height: frame.height))
             .filter { TextNormalizer.letterCount($0.displayText) >= 2 && !filter.isEchoOfTranslation($0) }
         let keys = blocks.map(\.key)
+
+        // Dịch trước: bóng thoại có ở 2 lần quét liên tiếp (kể cả khi đang cuộn) thì dịch sẵn vào cache,
+        // dừng lại là hiện ngay. Bóng thoại bị cắt ở mép màn hình đổi chữ liên tục nên không bị dịch nhầm.
+        if settings.prefetchWhileScrolling {
+            translation.prefetch(blocks.filter { previousScanKeys.contains($0.key) }, settings: settings)
+        }
+        previousScanKeys = Set(keys)
 
         // Không có chữ, hoặc chỉ còn các bóng thoại đang hiển thị → giữ nguyên.
         if keys.isEmpty || Set(keys).isSubset(of: Set(displayedKeys)) {

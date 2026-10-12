@@ -69,6 +69,7 @@ enum SettingsKey {
     static let ocrAccuracy = "ocrAccuracy"
     static let marginTop = "marginTop"
     static let marginBottom = "marginBottom"
+    static let prefetchWhileScrolling = "prefetchWhileScrolling"
 
     // Trạng thái nội bộ (extension ghi)
     static let broadcastActive = "broadcastActive"
@@ -98,6 +99,8 @@ struct AppSettings {
     /// Bỏ qua chữ ở phần trên/dưới màn hình (tỉ lệ 0...1) — thanh trạng thái, thanh công cụ trình duyệt.
     var marginTop: Double
     var marginBottom: Double
+    /// Dịch sẵn các bóng thoại khi đang cuộn để lúc dừng hiện ngay.
+    var prefetchWhileScrolling: Bool
 
     static let defaultValues: [String: Any] = [
         SettingsKey.engine: TranslatorEngine.google.rawValue,
@@ -107,8 +110,9 @@ struct AppSettings {
         SettingsKey.windowSize: WindowSize.normal.rawValue,
         SettingsKey.showOriginal: true,
         SettingsKey.fontScale: 1.0,
-        SettingsKey.scanInterval: 0.6,
-        SettingsKey.stableDelay: 0.6,
+        SettingsKey.scanInterval: 0.5,
+        SettingsKey.stableDelay: 0.4,
+        SettingsKey.prefetchWhileScrolling: true,
         SettingsKey.ocrAccuracy: OCRAccuracy.accurate.rawValue,
         SettingsKey.marginTop: 0.05,
         SettingsKey.marginBottom: 0.08,
@@ -140,7 +144,8 @@ struct AppSettings {
             stableDelay: d.double(forKey: SettingsKey.stableDelay),
             ocrAccuracy: OCRAccuracy(rawValue: string(SettingsKey.ocrAccuracy)) ?? .accurate,
             marginTop: d.double(forKey: SettingsKey.marginTop),
-            marginBottom: d.double(forKey: SettingsKey.marginBottom)
+            marginBottom: d.double(forKey: SettingsKey.marginBottom),
+            prefetchWhileScrolling: d.bool(forKey: SettingsKey.prefetchWhileScrolling)
         )
     }
 }
