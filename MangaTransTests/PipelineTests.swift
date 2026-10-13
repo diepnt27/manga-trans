@@ -302,3 +302,23 @@ final class FocusSelectorTests: XCTestCase {
         XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 400).count, 2)
     }
 }
+
+final class PanelLayoutTests: XCTestCase {
+    private let container = CGSize(width: 390, height: 600)
+
+    func testClampKeepsPanelInsideAndAboveMinimum() {
+        let dragged = PanelLayout.clamp(CGRect(x: 300, y: 580, width: 50, height: 20), in: container)
+        XCTAssertEqual(dragged.size, PanelLayout.minSize)
+        XCTAssertEqual(dragged.maxX, 390)
+        XCTAssertEqual(dragged.maxY, 600)
+
+        let huge = PanelLayout.clamp(CGRect(x: -40, y: -10, width: 900, height: 900), in: container)
+        XCTAssertEqual(huge, CGRect(x: 0, y: 0, width: 390, height: 600))
+    }
+
+    func testFractionRoundTrip() {
+        let frame = CGRect(x: 97.5, y: 150, width: 195, height: 150)
+        let fraction = PanelLayout.fraction(of: frame, in: container)
+        XCTAssertEqual(PanelLayout.frame(from: fraction, in: container), frame)
+    }
+}

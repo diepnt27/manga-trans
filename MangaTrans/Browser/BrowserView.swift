@@ -119,44 +119,104 @@ struct WebViewHost: UIViewRepresentable {
 private struct TranslationPanel: View {
     @ObservedObject var model: BrowserModel
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
-    @State private var offset: CGFloat = 0
-    @State private var dragStart: CGFloat?
+    // Vị trí & kích thước khung (tỉ lệ theo vùng web) — nhớ giữa các lần mở app.
+    @AppStorage("panelX") private var storedX = Double(PanelLayout.defaultFrame.minX)
+    @AppStorage("panelY") private var storedY = Double(PanelLayout.defaultFrame.minY)
+    @AppStorage("panelW") private var storedW = Double(PanelLayout.defaultFrame.width)
+    @AppStorage("panelH") private var storedH = Double(PanelLayout.defaultFrame.height)
+    /// Khung đang kéo/đổi cỡ (chưa lưu).
+    @State private var liveFrame: CGRect?
+    @State private var gestureStart: CGRect?
     @State private var collapsed = false
 
     var body: some View {
         GeometryReader { geo in
+            let frame = liveFrame ?? PanelLayout.frame(from: storedFrame, in: geo.size)
             VStack(spacing: 0) {
                 header
                     .contentShape(Rectangle())
-                    .gesture(dragGesture(height: geo.size.height))
+                    .gesture(moveGesture(container: geo.size, current: frame))
+                    .onTapGesture(count: 2) { withAnimation { storedFrame = PanelLayout.defaultFrame } }
                 if !collapsed {
-                    content.frame(maxHeight: geo.size.height * 0.32)
+                    content.frame(maxHeight: .infinity, alignment: .top)
                 }
             }
+            .frame(width: frame.width, height: collapsed ? nil : frame.height, alignment: .top)
             .background(Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.97), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.08)))
+            .overlay(alignment: .bottomTrailing) {
+                if !collapsed {
+                    resizeHandle.gesture(resizeGesture(container: geo.size, current: frame))
+                }
+            }
+            .simultaneousGesture(pinchGesture(container: geo.size, current: frame))
             .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-            .padding(.horizontal, 10)
-            .offset(y: clamped(offset, in: geo.size.height))
+            .offset(x: frame.minX, y: frame.minY)
         }
-        .padding(.top, 8)
     }
 
-    /// Kéo phần đầu khung để di chuyển (phần nội dung vẫn cuộn bình thường).
-    private func dragGesture(height: CGFloat) -> some Gesture {
-        DragGesture()
+    private var storedFrame: CGRect {
+        get { CGRect(x: storedX, y: storedY, width: storedW, height: storedH) }
+        nonmutating set {
+            storedX = Double(newValue.minX)
+            storedY = Double(newValue.minY)
+            storedW = Double(newValue.width)
+            storedH = Double(newValue.height)
+        }
+    }
+
+    private func commit(_ frame: CGRect?, in container: CGSize) {
+        if let frame { storedFrame = PanelLayout.fraction(of: frame, in: container) }
+        liveFrame = nil
+        gestureStart = nil
+    }
+
+    /// Kéo phần đầu khung để di chuyển tự do (phần nội dung vẫn cuộn bình thường). Chạm 2 lần: về chỗ cũ.
+    private func moveGesture(container: CGSize, current: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 2)
             .onChanged { value in
-                if dragStart == nil { dragStart = offset }
-                offset = (dragStart ?? 0) + value.translation.height
+                let start = gestureStart ?? current
+                gestureStart = start
+                liveFrame = PanelLayout.clamp(start.offsetBy(dx: value.translation.width, dy: value.translation.height),
+                                              in: container)
             }
-            .onEnded { _ in
-                offset = clamped(offset, in: height)
-                dragStart = nil
-            }
+            .onEnded { _ in commit(liveFrame, in: container) }
     }
 
-    private func clamped(_ value: CGFloat, in height: CGFloat) -> CGFloat {
-        min(max(0, value), max(0, height - 120))
+    /// Kéo góc dưới bên phải để đổi kích thước.
+    private func resizeGesture(container: CGSize, current: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let start = gestureStart ?? current
+                gestureStart = start
+                let resized = CGRect(x: start.minX, y: start.minY,
+                                     width: start.width + value.translation.width,
+                                     height: start.height + value.translation.height)
+                liveFrame = PanelLayout.clamp(resized, in: container)
+            }
+            .onEnded { _ in commit(liveFrame, in: container) }
+    }
+
+    /// Chụm/mở 2 ngón trên khung để thu nhỏ/phóng to (giữ nguyên tâm).
+    private func pinchGesture(container: CGSize, current: CGRect) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { scale in
+                let start = gestureStart ?? current
+                gestureStart = start
+                let width = start.width * scale, height = start.height * scale
+                let scaled = CGRect(x: start.midX - width / 2, y: start.midY - height / 2, width: width, height: height)
+                liveFrame = PanelLayout.clamp(scaled, in: container)
+            }
+            .onEnded { _ in commit(liveFrame, in: container) }
+    }
+
+    private var resizeHandle: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(Color.white.opacity(0.55))
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Đổi kích thước khung dịch")
     }
 
     private var header: some View {
@@ -280,5 +340,32 @@ private struct BookmarksSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// Tính toán khung dịch: lưu theo tỉ lệ vùng web để hợp mọi cỡ màn hình.
+enum PanelLayout {
+    static let defaultFrame = CGRect(x: 0.025, y: 0.01, width: 0.95, height: 0.34)
+    static let minSize = CGSize(width: 200, height: 110)
+
+    static func frame(from fraction: CGRect, in container: CGSize) -> CGRect {
+        clamp(CGRect(x: fraction.minX * container.width, y: fraction.minY * container.height,
+                     width: fraction.width * container.width, height: fraction.height * container.height),
+              in: container)
+    }
+
+    static func fraction(of frame: CGRect, in container: CGSize) -> CGRect {
+        guard container.width > 0, container.height > 0 else { return defaultFrame }
+        return CGRect(x: frame.minX / container.width, y: frame.minY / container.height,
+                      width: frame.width / container.width, height: frame.height / container.height)
+    }
+
+    /// Giữ khung trong vùng web và không nhỏ hơn mức tối thiểu.
+    static func clamp(_ frame: CGRect, in container: CGSize) -> CGRect {
+        let width = min(max(frame.width, minSize.width), max(minSize.width, container.width))
+        let height = min(max(frame.height, minSize.height), max(minSize.height, container.height))
+        let x = min(max(frame.minX, 0), max(0, container.width - width))
+        let y = min(max(frame.minY, 0), max(0, container.height - height))
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 }
