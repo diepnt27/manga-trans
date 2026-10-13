@@ -334,7 +334,7 @@ final class PanelLayoutTests: XCTestCase {
     }
 
     func testFractionRoundTrip() {
-        let frame = CGRect(x: 97.5, y: 150, width: 195, height: 150)
+        let frame = CGRect(x: 97.5, y: 150, width: 292.5, height: 150)
         let fraction = PanelLayout.fraction(of: frame, in: container)
         XCTAssertEqual(PanelLayout.frame(from: fraction, in: container), frame)
     }
