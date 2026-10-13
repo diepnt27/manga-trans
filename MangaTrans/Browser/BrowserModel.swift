@@ -69,6 +69,9 @@ final class BrowserModel: NSObject, ObservableObject {
     private var prefetchEnabled = true
     private var lastPrefetchScan = Date.distantPast
     private var previousPrefetchKeys: Set<String> = []
+    private var queue = BubbleQueue()
+    /// Các bóng thoại đang hiện trong khung dịch.
+    private var focusedKeys: Set<String> = []
 
     private let lastURLKey = "browserLastURL"
     private let bookmarksKey = "browserBookmarks"
@@ -309,6 +312,12 @@ final class BrowserModel: NSObject, ObservableObject {
         }
 
         let settings = AppSettings.load()
+        // Khung dịch: tối đa N bóng thoại trong vùng đọc; cuộn xuống thì chuyển sang các bóng chưa hiện.
+        let inZone = blocks.filter { settings.readingZone.verticalRange.contains(Double($0.rect.midY)) }
+        let focused = queue.select(inZone, maxCount: settings.maxBubbles)
+        queue.markShown(focused)
+        if !focused.isEmpty { focusedKeys = Set(focused.map(\.key)) }
+
         let initial: [(String, PiPEntry.State)] = blocks.map { block in
             if let cached = translation.cached(block, engine: settings.engine) { return (cached, .done) }
             return ("…", .pending)
@@ -339,12 +348,9 @@ final class BrowserModel: NSObject, ObservableObject {
     }
 
     private func show(_ blocks: [TextBlock], _ results: [(String, PiPEntry.State)], generation scanGeneration: Int) {
-        // Khung dịch: chỉ các bóng thoại trong vùng đọc, vừa đủ độ dài. Kiểu đè lên bóng thoại: hiện tất cả.
-        let settings = AppSettings.load()
-        let focused = Set(FocusSelector.select(blocks, zone: settings.readingZone,
-                                               maxCharacters: settings.windowSize.maxCharacters).map(\.key))
+        // Khung dịch: chỉ các bóng thoại đã chọn. Kiểu đè lên bóng thoại: hiện tất cả.
         let panelEntries = zip(blocks, results)
-            .filter { focused.contains($0.0.key) }
+            .filter { focusedKeys.contains($0.0.key) }
             .map { PiPEntry(original: $0.displayText, translation: $1.0, state: $1.1) }
         // Vùng đọc trống (ví dụ chỉ có chữ ở cuối màn hình) → giữ bản dịch đang hiện.
         if !panelEntries.isEmpty { entries = panelEntries }
@@ -363,6 +369,8 @@ extension BrowserModel: WKNavigationDelegate {
         overlays = []
         entries = []
         lastKeys = []
+        queue.reset()
+        focusedKeys = []
         status = Self.idleStatus
     }
 

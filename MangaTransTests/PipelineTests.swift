@@ -283,23 +283,40 @@ final class TranslationServiceTests: XCTestCase {
     }
 }
 
-final class FocusSelectorTests: XCTestCase {
+final class BubbleQueueTests: XCTestCase {
     private func block(_ text: String, y: Double) -> TextBlock {
         TextGrouper.group([OCRLine(text: text, confidence: 1, x: 0.1, y: y, w: 0.5, h: 0.02)],
                           imageSize: CGSize(width: 1000, height: 2000))[0]
     }
 
-    func testTopZoneShowsUpperBubblesOnly() {
-        let blocks = [block("FIRST", y: 0.2), block("SECOND", y: 0.45), block("BOTTOM", y: 0.85)]
-        XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 220).map(\.displayText), ["FIRST", "SECOND"])
-        XCTAssertEqual(FocusSelector.select(blocks, zone: .full, maxCharacters: 220).count, 3)
+    private func page(scrolledBy dy: Double) -> [TextBlock] {
+        [block("ONE", y: 0.15 - dy), block("TWO", y: 0.35 - dy), block("THREE", y: 0.55 - dy), block("FOUR", y: 0.75 - dy)]
+            .filter { $0.rect.midY > 0 }
     }
 
-    func testStopsWhenTooLongButKeepsAtLeastOne() {
-        let long = String(repeating: "WORD ", count: 40) // 200 ký tự
-        let blocks = [block(long, y: 0.1), block("NEXT ONE", y: 0.3)]
-        XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 120).count, 1)
-        XCTAssertEqual(FocusSelector.select(blocks, zone: .top, maxCharacters: 400).count, 2)
+    func testShowsTwoThenNextTwoAfterScrolling() {
+        var queue = BubbleQueue()
+        let first = queue.select(page(scrolledBy: 0), maxCount: 2)
+        XCTAssertEqual(first.map(\.displayText), ["ONE", "TWO"])
+        queue.markShown(first)
+
+        // Chưa cuộn → giữ nguyên, không tự nhảy sang bóng khác.
+        XCTAssertEqual(queue.select(page(scrolledBy: 0.005), maxCount: 2).map(\.displayText), ["ONE", "TWO"])
+
+        // Cuộn xuống một chút → 2 bóng dưới.
+        let next = queue.select(page(scrolledBy: 0.1), maxCount: 2)
+        XCTAssertEqual(next.map(\.displayText), ["THREE", "FOUR"])
+        queue.markShown(next)
+
+        // Cuộn ngược lên đoạn đã đọc → hiện lại đoạn đó.
+        XCTAssertEqual(queue.select(page(scrolledBy: -0.05).prefix(2).map { $0 }, maxCount: 2).map(\.displayText),
+                       ["ONE", "TWO"])
+    }
+
+    func testRespectsMaxCount() {
+        let queue = BubbleQueue()
+        XCTAssertEqual(queue.select(page(scrolledBy: 0), maxCount: 3).count, 3)
+        XCTAssertEqual(queue.select(page(scrolledBy: 0), maxCount: 0).count, 1)
     }
 }
 

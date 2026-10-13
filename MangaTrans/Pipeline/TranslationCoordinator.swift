@@ -28,6 +28,7 @@ final class TranslationCoordinator: ObservableObject {
     private var displayedKeys: [String] = []
     private var pendingKeys: [String] = []
     private var previousScanKeys: Set<String> = []
+    private var queue = BubbleQueue()
     private var pendingBlocks: [TextBlock] = []
     private var debounceTask: Task<Void, Never>?
     private var translateTask: Task<Void, Never>?
@@ -95,6 +96,7 @@ final class TranslationCoordinator: ObservableObject {
         displayedKeys = []
         pendingKeys = []
         previousScanKeys = []
+        queue.reset()
         lastFrameTimestamp = 0
         filter.reset()
         entries = []
@@ -140,9 +142,9 @@ final class TranslationCoordinator: ObservableObject {
         }
         previousScanKeys = Set(allBlocks.map(\.key))
 
-        // Chỉ hiện các bóng thoại trong vùng đọc, vừa đủ độ dài cửa sổ.
-        let blocks = FocusSelector.select(allBlocks, zone: settings.readingZone,
-                                          maxCharacters: settings.windowSize.maxCharacters)
+        // Chỉ hiện tối đa N bóng thoại trong vùng đọc; cuộn xuống thì chuyển sang các bóng chưa hiện.
+        let inZone = allBlocks.filter { settings.readingZone.verticalRange.contains(Double($0.rect.midY)) }
+        let blocks = queue.select(inZone, maxCount: settings.maxBubbles)
         let keys = blocks.map(\.key)
 
         // Không có chữ, hoặc chỉ còn các bóng thoại đang hiển thị → giữ nguyên.
@@ -169,6 +171,7 @@ final class TranslationCoordinator: ObservableObject {
 
     private func commit(_ blocks: [TextBlock]) {
         displayedKeys = blocks.map(\.key)
+        queue.markShown(blocks)
         let settings = AppSettings.load()
 
         let initialEntries = blocks.map { block -> PiPEntry in

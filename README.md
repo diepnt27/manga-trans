@@ -99,7 +99,7 @@ Apple ID miễn phí: app hết hạn sau **7 ngày** và phải cài lại bằ
 
 ### Mẹo
 
-- Trang nhiều chữ: cửa sổ chỉ hiện bóng thoại trong **Vùng đọc** (mặc định nửa trên màn hình), mỗi lần một đoạn vừa cửa sổ — cuộn xuống để xem đoạn tiếp. Đổi trong Cài đặt → Cửa sổ dịch.
+- Trang nhiều chữ: mỗi lần hiện tối đa **2 bóng thoại** (chỉnh 1–6 ở Trang chủ hoặc Cài đặt → Cửa sổ dịch). Cuộn xuống thì app bỏ qua các bóng đã hiện và hiện tiếp các bóng bên dưới (đã dịch sẵn); không cuộn thì giữ nguyên.
 - Kéo cửa sổ nổi sát mép trên/dưới màn hình. App tự lọc chữ của chính cửa sổ nổi, nhưng để ở mép thì bóng thoại không bị che.
 - Nếu việc quét màn hình tự dừng sau vài giây (iOS giới hạn extension khoảng 50 MB RAM), hãy chuyển **Độ chính xác OCR** sang **Nhanh**. App cũng tự chuyển nếu phát hiện lần trước bị tắt giữa chừng.
 - Dịch chậm hoặc nhảy liên tục: tăng **Chờ đứng yên**.

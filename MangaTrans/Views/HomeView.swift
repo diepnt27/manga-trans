@@ -7,6 +7,7 @@ struct HomeView: View {
     @AppStorage(SettingsKey.engine, store: AppGroup.defaults) private var engine: TranslatorEngine = .google
     @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .normal
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
+    @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 2
     @AppStorage(SettingsKey.autoSwitchedToFast, store: AppGroup.defaults) private var autoSwitchedToFast = false
 
     private let accent = LinearGradient(colors: [Color(red: 0.25, green: 0.55, blue: 0.98), Color(red: 0.45, green: 0.45, blue: 0.95)],
@@ -90,6 +91,10 @@ struct HomeView: View {
                 Picker("Cỡ cửa sổ", selection: $windowSize) {
                     ForEach(WindowSize.allCases) { Text($0.title).tag($0) }
                 }
+            }
+            Divider().padding(.leading, 56)
+            row(icon: "bubble.left.and.bubble.right", title: "Số bóng thoại mỗi lần") {
+                Stepper("\(maxBubbles)", value: $maxBubbles, in: 1...6).fixedSize()
             }
             Divider().padding(.leading, 56)
             row(icon: "text.quote", title: "Hiện câu gốc") {

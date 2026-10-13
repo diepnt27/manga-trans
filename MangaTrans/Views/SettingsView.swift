@@ -12,7 +12,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.deepseekModel, store: AppGroup.defaults) private var deepseekModel = AppSettings.defaultDeepSeekModel
     @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .normal
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
-    @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .top
+    @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .full
+    @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 2
     @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 1.0
     @AppStorage(SettingsKey.ocrAccuracy, store: AppGroup.defaults) private var ocrAccuracy: OCRAccuracy = .accurate
     @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.5
@@ -97,6 +98,7 @@ struct SettingsView: View {
                     Picker("Cỡ cửa sổ", selection: $windowSize) {
                         ForEach(WindowSize.allCases) { Text($0.title).tag($0) }
                     }
+                    Stepper("Số bóng thoại mỗi lần: \(maxBubbles)", value: $maxBubbles, in: 1...6)
                     Picker("Vùng đọc", selection: $readingZone) {
                         ForEach(ReadingZone.allCases) { Text($0.title).tag($0) }
                     }
@@ -105,7 +107,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Cửa sổ dịch")
                 } footer: {
-                    Text("Vùng đọc: chỉ hiện bóng thoại trong vùng này, mỗi lần một đoạn vừa cửa sổ (Nhỏ ~120, Vừa ~220, Lớn ~400 ký tự). Trang nhiều chữ thì cuộn xuống để xem đoạn tiếp — bản dịch đã được chuẩn bị sẵn.")
+                    Text("Mỗi lần hiện tối đa số bóng thoại đã chọn, từ trên xuống. Cuộn xuống: bỏ qua các bóng đã hiện, hiện tiếp các bóng bên dưới (đã dịch sẵn). Không cuộn thì giữ nguyên. Vùng đọc: chỉ lấy bóng thoại trong vùng này của màn hình.")
                 }
 
                 Section {
