@@ -37,7 +37,7 @@ struct HomeView: View {
                 .padding(16)
             }
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle("Manga Mode")
+            .navigationTitle("Manga Browser")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

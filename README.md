@@ -1,4 +1,4 @@
-# Dịch Truyện — dịch màn hình khi đọc truyện (giống iTranscreen)
+# Manga Browser — dịch truyện tranh trên màn hình (giống iTranscreen)
 
 App iOS dịch chữ trên màn hình (Anh → Việt) và hiện bản dịch trong **cửa sổ nổi** khi bạn đọc truyện tranh trên Safari hay bất kỳ app nào.
 
