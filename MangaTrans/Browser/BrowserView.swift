@@ -15,25 +15,45 @@ struct BrowserView: View {
     @AppStorage("browserDisplayMode") private var displayMode: BrowserDisplayMode = .panel
     @State private var address = ""
     @State private var showBookmarks = false
+    /// Toàn màn hình: ẩn thanh địa chỉ, thanh công cụ và thanh tab để dành chỗ cho truyện.
+    @State private var isFullScreen = false
     @FocusState private var addressFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            addressBar
-            ZStack(alignment: .top) {
-                WebViewHost(webView: model.webView)
-                if model.isTranslationEnabled {
-                    switch displayMode {
-                    case .panel:
-                        TranslationPanel(model: model)
-                    case .overlay:
+        NavigationStack {
+            VStack(spacing: 0) {
+                if !isFullScreen { addressBar }
+                ZStack(alignment: .top) {
+                    WebViewHost(webView: model.webView)
+                    if model.isTranslationEnabled && displayMode == .overlay {
                         OverlayLayer(model: model)
                     }
                 }
+                if !isFullScreen { toolbar }
             }
-            toolbar
+            // Khung dịch nằm trên cả thanh địa chỉ → kéo lên sát mép trên được, không chiếm chỗ đọc truyện.
+            .overlay {
+                if model.isTranslationEnabled && displayMode == .panel {
+                    TranslationPanel(model: model)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                if isFullScreen {
+                    Button { setFullScreen(false) } label: {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Color.black.opacity(0.55), in: Circle())
+                    }
+                    .accessibilityLabel("Thoát toàn màn hình")
+                    .padding(16)
+                }
+            }
+            .background(Color.black)
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(isFullScreen ? .hidden : .visible, for: .tabBar)
         }
-        .background(Color.black)
         .onAppear { model.restoreIfNeeded() }
         .onChange(of: model.currentURL) { url in
             if !addressFocused { address = url }
@@ -61,6 +81,11 @@ struct BrowserView: View {
                     Button { address = "" } label: {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
+                } else {
+                    Button { setFullScreen(true) } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Toàn màn hình")
                 }
             }
             .padding(.horizontal, 12)
@@ -94,6 +119,11 @@ struct BrowserView: View {
         }
         .padding(.vertical, 6)
         .background(Color(white: 0.08))
+    }
+
+    private func setFullScreen(_ value: Bool) {
+        addressFocused = false
+        withAnimation(.easeInOut(duration: 0.2)) { isFullScreen = value }
     }
 
     private func toolbarButton(_ icon: String, enabled: Bool = true, tint: Color = .primary,
@@ -150,7 +180,8 @@ private struct TranslationPanel: View {
                 }
             }
             .simultaneousGesture(pinchGesture(container: geo.size, current: frame))
-            .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+            // Đổ bóng tốn công vẽ lại → tắt khi đang kéo cho mượt.
+            .shadow(color: .black.opacity(liveFrame == nil ? 0.5 : 0), radius: liveFrame == nil ? 10 : 0, y: 4)
             .offset(x: frame.minX, y: frame.minY)
         }
     }
@@ -173,7 +204,8 @@ private struct TranslationPanel: View {
 
     /// Kéo phần đầu khung để di chuyển tự do (phần nội dung vẫn cuộn bình thường). Chạm 2 lần: về chỗ cũ.
     private func moveGesture(container: CGSize, current: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 2)
+        // Đo theo toạ độ màn hình: đo theo khung (đang di chuyển) làm khung bị giật.
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
             .onChanged { value in
                 let start = gestureStart ?? current
                 gestureStart = start
@@ -185,7 +217,7 @@ private struct TranslationPanel: View {
 
     /// Kéo góc dưới bên phải để đổi kích thước.
     private func resizeGesture(container: CGSize, current: CGRect) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
                 let start = gestureStart ?? current
                 gestureStart = start
@@ -220,33 +252,39 @@ private struct TranslationPanel: View {
     }
 
     private var header: some View {
-        HStack {
-            Capsule().fill(Color.white.opacity(0.25)).frame(width: 36, height: 5)
+        // Thanh đầu mỏng: chỗ để kéo khung, trạng thái và 2 nút nhỏ.
+        HStack(spacing: 6) {
+            Capsule().fill(Color.white.opacity(0.25)).frame(width: 30, height: 4)
             Text(model.status)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
-            Button { model.rescan() } label: { Image(systemName: "arrow.triangle.2.circlepath") }
-            Button { withAnimation { collapsed.toggle() } } label: {
-                Image(systemName: collapsed ? "chevron.down" : "chevron.up")
+            Button { model.rescan() } label: {
+                Image(systemName: "arrow.triangle.2.circlepath").frame(width: 30, height: 24)
             }
+            .accessibilityLabel("Dịch lại")
+            Button { withAnimation { collapsed.toggle() } } label: {
+                Image(systemName: collapsed ? "chevron.down" : "chevron.up").frame(width: 30, height: 24)
+            }
+            .accessibilityLabel(collapsed ? "Mở rộng" : "Thu gọn")
         }
-        .font(.subheadline)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .font(.footnote.weight(.semibold))
+        .padding(.leading, 12)
+        .padding(.trailing, 4)
+        .padding(.vertical, 3)
     }
 
     private var content: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: 10) {
                 if model.entries.isEmpty {
                     Text("Mở trang truyện rồi dừng cuộn — bản dịch sẽ hiện ở đây.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(Array(model.entries.enumerated()), id: \.offset) { _, entry in
-                        VStack(spacing: 6) {
+                        VStack(spacing: 4) {
                             if showOriginal {
                                 Text(entry.original)
                                     .font(.caption.weight(.semibold))
@@ -262,8 +300,8 @@ private struct TranslationPanel: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
         }
     }
 
@@ -345,7 +383,7 @@ private struct BookmarksSheet: View {
 
 /// Tính toán khung dịch: lưu theo tỉ lệ vùng web để hợp mọi cỡ màn hình.
 enum PanelLayout {
-    static let defaultFrame = CGRect(x: 0.025, y: 0.01, width: 0.95, height: 0.34)
+    static let defaultFrame = CGRect(x: 0.02, y: 0, width: 0.96, height: 0.22)
     static let minSize = CGSize(width: 200, height: 110)
 
     static func frame(from fraction: CGRect, in container: CGSize) -> CGRect {
