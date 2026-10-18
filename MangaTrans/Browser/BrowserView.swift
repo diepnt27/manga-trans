@@ -286,32 +286,47 @@ private struct TranslationPanel: View {
     }
 
     private var content: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                if model.entries.isEmpty {
-                    Text("Mở trang truyện rồi dừng cuộn — bản dịch sẽ hiện ở đây.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(model.entries.enumerated()), id: \.offset) { _, entry in
-                        VStack(spacing: 4) {
-                            if showOriginal {
-                                Text(entry.original)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color(white: 0.72))
-                                Rectangle().fill(Color.white.opacity(0.18)).frame(height: 1).padding(.horizontal, 30)
-                            }
-                            Text(entry.translation)
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(color(for: entry.state))
-                        }
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                    }
+        Group {
+            if model.entries.isEmpty {
+                Text("Mở trang truyện rồi dừng cuộn — bản dịch sẽ hiện ở đây.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                // Chữ dài không vừa khung → ưu tiên tiếng Việt: thu câu gốc còn 1 dòng, rồi bỏ câu gốc,
+                // cuối cùng mới cho cuộn.
+                ViewThatFits(in: .vertical) {
+                    entriesView(originalLines: showOriginal ? nil : 0)
+                    if showOriginal { entriesView(originalLines: 1) }
+                    entriesView(originalLines: 0)
+                    ScrollView { entriesView(originalLines: 0) }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+    }
+
+    /// `originalLines`: nil = câu gốc đầy đủ, 0 = ẩn câu gốc, n = tối đa n dòng.
+    private func entriesView(originalLines: Int?) -> some View {
+        VStack(spacing: 10) {
+            ForEach(Array(model.entries.enumerated()), id: \.offset) { _, entry in
+                VStack(spacing: 4) {
+                    if originalLines != 0 {
+                        Text(entry.original)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color(white: 0.72))
+                            .lineLimit(originalLines)
+                        Rectangle().fill(Color.white.opacity(0.18)).frame(height: 1).padding(.horizontal, 30)
+                    }
+                    Text(entry.translation)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(color(for: entry.state))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+            }
         }
     }
 
@@ -393,7 +408,7 @@ private struct BookmarksSheet: View {
 
 /// Tính toán khung dịch: lưu theo tỉ lệ vùng web để hợp mọi cỡ màn hình.
 enum PanelLayout {
-    static let defaultFrame = CGRect(x: 0.02, y: 0, width: 0.96, height: 0.22)
+    static let defaultFrame = CGRect(x: 0, y: 0, width: 1, height: 0.18)
     static let minSize = CGSize(width: 200, height: 110)
 
     static func frame(from fraction: CGRect, in container: CGSize) -> CGRect {

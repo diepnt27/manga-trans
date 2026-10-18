@@ -10,15 +10,15 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.deepseekKey, store: AppGroup.defaults) private var deepseekKey = ""
     @AppStorage(SettingsKey.googleCloudKey, store: AppGroup.defaults) private var googleCloudKey = ""
     @AppStorage(SettingsKey.deepseekModel, store: AppGroup.defaults) private var deepseekModel = AppSettings.defaultDeepSeekModel
-    @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .normal
+    @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .small
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
-    @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .full
-    @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 2
-    @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 1.0
+    @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .middle
+    @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 1
+    @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 0.8
     @AppStorage(SettingsKey.ocrAccuracy, store: AppGroup.defaults) private var ocrAccuracy: OCRAccuracy = .accurate
-    @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.5
+    @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.6
     @AppStorage(SettingsKey.stableDelay, store: AppGroup.defaults) private var stableDelay = 0.4
-    @AppStorage(SettingsKey.prefetchWhileScrolling, store: AppGroup.defaults) private var prefetchWhileScrolling = true
+    @AppStorage(SettingsKey.prefetchWhileScrolling, store: AppGroup.defaults) private var prefetchWhileScrolling = false
     @AppStorage(SettingsKey.marginTop, store: AppGroup.defaults) private var marginTop = 0.05
     @AppStorage(SettingsKey.marginBottom, store: AppGroup.defaults) private var marginBottom = 0.08
 

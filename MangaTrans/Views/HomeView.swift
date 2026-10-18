@@ -5,9 +5,9 @@ struct HomeView: View {
     @ObservedObject var pip: PiPManager
 
     @AppStorage(SettingsKey.engine, store: AppGroup.defaults) private var engine: TranslatorEngine = .google
-    @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .normal
+    @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .small
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
-    @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 2
+    @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 1
     @AppStorage(SettingsKey.autoSwitchedToFast, store: AppGroup.defaults) private var autoSwitchedToFast = false
 
     private let accent = LinearGradient(colors: [Color(red: 0.25, green: 0.55, blue: 0.98), Color(red: 0.45, green: 0.45, blue: 0.95)],
