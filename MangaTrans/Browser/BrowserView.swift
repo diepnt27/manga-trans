@@ -23,14 +23,22 @@ struct BrowserView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if !isFullScreen { addressBar }
+                // Trang web luôn kéo dài tới đáy màn hình; thanh công cụ và thanh tab nằm đè lên,
+                // nên khi chúng ẩn/hiện trang không bị co giãn hay nhảy.
                 ZStack(alignment: .top) {
                     WebViewHost(webView: model.webView)
                     if model.isTranslationEnabled && displayMode == .overlay {
                         OverlayLayer(model: model)
                     }
                 }
-                if !isFullScreen { toolbar }
+                .ignoresSafeArea(.container, edges: .bottom)
             }
+            .overlay(alignment: .bottom) {
+                if !hidesBottomBars {
+                    toolbar.transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: hidesBottomBars)
             // Khung dịch nằm trên cả thanh địa chỉ → kéo lên sát mép trên được, không chiếm chỗ đọc truyện.
             .overlay {
                 if model.isTranslationEnabled && displayMode == .panel {
@@ -52,7 +60,7 @@ struct BrowserView: View {
             }
             .background(Color.black)
             .toolbar(.hidden, for: .navigationBar)
-            .toolbar(isFullScreen ? .hidden : .visible, for: .tabBar)
+            .toolbar(hidesBottomBars ? .hidden : .visible, for: .tabBar)
         }
         .onAppear { model.restoreIfNeeded() }
         .onChange(of: model.currentURL) { url in
@@ -120,6 +128,8 @@ struct BrowserView: View {
         .padding(.vertical, 6)
         .background(Color(white: 0.08))
     }
+
+    private var hidesBottomBars: Bool { isFullScreen || model.isChromeHidden }
 
     private func setFullScreen(_ value: Bool) {
         addressFocused = false

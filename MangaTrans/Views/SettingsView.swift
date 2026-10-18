@@ -22,6 +22,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.marginTop, store: AppGroup.defaults) private var marginTop = 0.05
     @AppStorage(SettingsKey.marginBottom, store: AppGroup.defaults) private var marginBottom = 0.08
 
+    @AppStorage(BrowserModel.autoHideChromeKey) private var autoHideChrome = true
     @State private var testResult: String?
     @State private var isTesting = false
 
@@ -108,6 +109,14 @@ struct SettingsView: View {
                     Text("Cửa sổ dịch")
                 } footer: {
                     Text("Mỗi lần hiện tối đa số bóng thoại đã chọn, từ trên xuống. Cuộn xuống: bỏ qua các bóng đã hiện, hiện tiếp các bóng bên dưới (đã dịch sẵn). Không cuộn thì giữ nguyên. Vùng đọc: chỉ lấy bóng thoại trong vùng này của màn hình.")
+                }
+
+                Section {
+                    Toggle("Tự ẩn thanh công cụ khi cuộn", isOn: $autoHideChrome)
+                } header: {
+                    Text("Trình duyệt")
+                } footer: {
+                    Text("Cuộn xuống để đọc: thanh công cụ và thanh tab ẩn đi. Cuộn ngược lên một chút hoặc về đầu trang để hiện lại.")
                 }
 
                 Section {

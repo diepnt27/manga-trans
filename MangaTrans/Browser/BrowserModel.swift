@@ -36,6 +36,8 @@ final class BrowserModel: NSObject, ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var progress: Double = 0
     @Published private(set) var isScrolling = false
+    /// Thanh công cụ dưới và thanh tab đang ẩn (tự ẩn khi cuộn xuống đọc).
+    @Published private(set) var isChromeHidden = false
     @Published private(set) var entries: [PiPEntry] = []
     @Published private(set) var overlays: [Overlay] = []
     @Published private(set) var status = idleStatus
@@ -69,6 +71,9 @@ final class BrowserModel: NSObject, ObservableObject {
     private var prefetchEnabled = true
     private var lastPrefetchScan = Date.distantPast
     private var previousPrefetchKeys: Set<String> = []
+    private var autoHideChrome = true
+    private var lastOffsetY: CGFloat = 0
+    private var chromeTravel: CGFloat = 0
     private var queue = BubbleQueue()
     /// Các bóng thoại đang hiện trong khung dịch.
     private var focusedKeys: Set<String> = []
@@ -184,17 +189,21 @@ final class BrowserModel: NSObject, ObservableObject {
             webView.observe(\.canGoForward, options: [.new]) { [weak self] webView, _ in
                 Task { @MainActor in self?.canGoForward = webView.canGoForward }
             },
-            webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-                Task { @MainActor in self?.didScroll() }
+            webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
+                let offsetY = scrollView.contentOffset.y
+                let byUser = scrollView.isDragging || scrollView.isDecelerating
+                Task { @MainActor in self?.didScroll(offsetY: offsetY, byUser: byUser) }
             },
         ]
     }
 
-    private func didScroll() {
+    private func didScroll(offsetY: CGFloat, byUser: Bool) {
+        updateChrome(offsetY: offsetY, byUser: byUser)
         generation += 1
         if !isScrolling {
             isScrolling = true
             overlays = []
+            autoHideChrome = UserDefaults.standard.object(forKey: Self.autoHideChromeKey) as? Bool ?? true
             let settings = AppSettings.load()
             stableDelay = max(0.25, settings.stableDelay)
             prefetchEnabled = settings.prefetchWhileScrolling
@@ -204,6 +213,34 @@ final class BrowserModel: NSObject, ObservableObject {
         // Đang cuộn: cứ ~1.2 giây quét một lần để dịch sẵn, dừng lại là hiện ngay.
         if prefetchEnabled, !isScanning, Date().timeIntervalSince(lastPrefetchScan) > 1.2 {
             prefetchScan()
+        }
+    }
+
+    // MARK: - Tự ẩn thanh công cụ
+
+    nonisolated static let autoHideChromeKey = "browserAutoHideChrome"
+
+    /// Cuộn xuống (đang đọc) → ẩn thanh công cụ dưới và thanh tab; cuộn ngược lên hoặc về đầu trang → hiện lại.
+    private func updateChrome(offsetY: CGFloat, byUser: Bool) {
+        defer { lastOffsetY = offsetY }
+        guard autoHideChrome else {
+            if isChromeHidden { isChromeHidden = false }
+            return
+        }
+        if offsetY <= 10 {
+            chromeTravel = 0
+            if isChromeHidden { isChromeHidden = false }
+            return
+        }
+        // Bỏ qua thay đổi do trang tự đổi bố cục, chỉ tính khi người dùng cuộn.
+        guard byUser else { return }
+        let delta = offsetY - lastOffsetY
+        if (delta > 0) != (chromeTravel > 0) { chromeTravel = 0 }
+        chromeTravel += delta
+        if chromeTravel > 30, !isChromeHidden {
+            isChromeHidden = true
+        } else if chromeTravel < -60, isChromeHidden {
+            isChromeHidden = false
         }
     }
 
