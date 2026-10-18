@@ -34,6 +34,7 @@ final class TranslationCoordinator: ObservableObject {
     private var translateTask: Task<Void, Never>?
     private var lastFrameTimestamp: TimeInterval = 0
     private var content = PiPContent.message(idleMessage)
+    private var renderSignature = ""
 
     init() {
         AppSettings.registerDefaults()
@@ -224,10 +225,21 @@ final class TranslationCoordinator: ObservableObject {
             originals: newContent.entries.map(\.original),
             translations: newContent.entries.map(\.translation) + [newContent.message ?? ""]
         )
-        pip.display(newContent, settings: AppSettings.load())
+        let settings = AppSettings.load()
+        renderSignature = Self.renderSignature(settings)
+        pip.display(newContent, settings: settings)
     }
 
+    /// Cài đặt đổi → chỉ vẽ lại khi những mục ảnh hưởng đến cửa sổ nổi thực sự đổi.
     private func redraw() {
-        pip.display(content, settings: AppSettings.load())
+        let settings = AppSettings.load()
+        let signature = Self.renderSignature(settings)
+        guard signature != renderSignature else { return }
+        renderSignature = signature
+        pip.display(content, settings: settings)
+    }
+
+    private static func renderSignature(_ settings: AppSettings) -> String {
+        "\(settings.windowSize.rawValue)|\(settings.showOriginal)|\(settings.fontScale)"
     }
 }

@@ -26,18 +26,31 @@ final class PiPManager: NSObject, ObservableObject {
         super.init()
         displayLayer.videoGravity = .resizeAspect
         displayLayer.backgroundColor = UIColor.black.cgColor
-        activateAudioSession()
         setupController()
-        // Đẩy lại khung hình định kỳ để PiP luôn có nội dung.
-        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.reenqueue() }
-        RunLoop.main.add(timer, forMode: .common)
-        heartbeat = timer
     }
 
     /// Tự bật cửa sổ nổi khi rời app (chỉ nên bật khi đang dịch).
     var startsAutomaticallyInBackground: Bool {
         get { controller?.canStartPictureInPictureAutomaticallyFromInline ?? false }
-        set { controller?.canStartPictureInPictureAutomaticallyFromInline = newValue }
+        set {
+            controller?.canStartPictureInPictureAutomaticallyFromInline = newValue
+            if newValue { activateAudioSession() }
+            updateHeartbeat()
+        }
+    }
+
+    /// Đẩy lại khung hình mỗi giây để PiP luôn có nội dung — chỉ chạy khi cửa sổ nổi đang/sắp được dùng,
+    /// không thì tốn pin vô ích (ví dụ khi chỉ dùng tab Trình duyệt).
+    private func updateHeartbeat() {
+        let needed = isActive || pendingStart || startsAutomaticallyInBackground
+        if needed, heartbeat == nil {
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.reenqueue() }
+            RunLoop.main.add(timer, forMode: .common)
+            heartbeat = timer
+        } else if !needed {
+            heartbeat?.invalidate()
+            heartbeat = nil
+        }
     }
 
     func display(_ content: PiPContent, settings: AppSettings) {
@@ -58,11 +71,13 @@ final class PiPManager: NSObject, ObservableObject {
             controller.startPictureInPicture()
         } else {
             pendingStart = true
+            updateHeartbeat()
         }
     }
 
     func stop() {
         pendingStart = false
+        updateHeartbeat()
         guard let controller, controller.isPictureInPictureActive else { return }
         isStoppingProgrammatically = true
         controller.stopPictureInPicture()
@@ -141,10 +156,12 @@ final class PiPManager: NSObject, ObservableObject {
 extension PiPManager: AVPictureInPictureControllerDelegate {
     func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
         isActive = true
+        updateHeartbeat()
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
         isActive = false
+        updateHeartbeat()
         let closedByUser = !isRestoring && !isStoppingProgrammatically
         isRestoring = false
         isStoppingProgrammatically = false

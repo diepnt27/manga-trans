@@ -201,8 +201,8 @@ final class BrowserModel: NSObject, ObservableObject {
         }
         followUpTimer?.invalidate()
         scheduleScan(after: stableDelay)
-        // Đang cuộn: cứ ~0.8 giây quét một lần để dịch sẵn, dừng lại là hiện ngay.
-        if prefetchEnabled, !isScanning, Date().timeIntervalSince(lastPrefetchScan) > 0.8 {
+        // Đang cuộn: cứ ~1.2 giây quét một lần để dịch sẵn, dừng lại là hiện ngay.
+        if prefetchEnabled, !isScanning, Date().timeIntervalSince(lastPrefetchScan) > 1.2 {
             prefetchScan()
         }
     }
@@ -253,6 +253,11 @@ final class BrowserModel: NSObject, ObservableObject {
         isScanning = true
         let configuration = WKSnapshotConfiguration()
         configuration.afterScreenUpdates = afterScreenUpdates
+        // Chụp ở mật độ 2x thay vì 3x: ít hơn ~55% điểm ảnh cho OCR, chữ truyện vẫn đủ nét.
+        let screenScale = webView.window?.screen.scale ?? 2
+        if screenScale > 2 {
+            configuration.snapshotWidth = NSNumber(value: Double(webView.bounds.width * 2 / screenScale))
+        }
         let minimumTextHeight = Self.minimumTextHeight
         webView.takeSnapshot(with: configuration) { [weak self] image, _ in
             Task { @MainActor in
@@ -291,15 +296,15 @@ final class BrowserModel: NSObject, ObservableObject {
         // Đã cuộn tiếp trong lúc nhận dạng → khung hình cũ, bỏ.
         guard scanGeneration == generation, isTranslationEnabled else { return }
 
-        if followUp {
-            // Ảnh truyện thường tải chậm hơn → quét lại một lần nữa sau khi dừng.
+        let blocks = Self.makeBlocks(lines, imageSize: imageSize)
+
+        if followUp && blocks.isEmpty {
+            // Chưa thấy chữ — có thể ảnh truyện còn đang tải → quét lại một lần sau khi dừng.
             followUpTimer?.invalidate()
             followUpTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
                 Task { @MainActor in self?.scan(followUp: false) }
             }
         }
-
-        let blocks = Self.makeBlocks(lines, imageSize: imageSize)
         let keys = blocks.map(\.key)
         if keys == lastKeys && scanGeneration == lastGeneration { return }
         lastKeys = keys

@@ -339,3 +339,33 @@ final class PanelLayoutTests: XCTestCase {
         XCTAssertEqual(PanelLayout.frame(from: fraction, in: container), frame)
     }
 }
+
+final class FrameFingerprintTests: XCTestCase {
+    private func buffer(fill: UInt8, stripeAt stripe: Int? = nil) -> CVPixelBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferCreate(nil, 120, 240, kCVPixelFormatType_32BGRA, nil, &pixelBuffer)
+        let buffer = pixelBuffer!
+        CVPixelBufferLockBaseAddress(buffer, [])
+        let base = CVPixelBufferGetBaseAddress(buffer)!.assumingMemoryBound(to: UInt8.self)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
+        for y in 0..<240 {
+            let value: UInt8 = (stripe.map { y >= $0 && y < $0 + 60 } ?? false) ? 255 : fill
+            for x in 0..<120 * 4 { base[y * bytesPerRow + x] = value }
+        }
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        return buffer
+    }
+
+    func testStillScreenIsDetectedAsUnchanged() throws {
+        let a = try XCTUnwrap(FrameFingerprint(pixelBuffer: buffer(fill: 40)))
+        let b = try XCTUnwrap(FrameFingerprint(pixelBuffer: buffer(fill: 40)))
+        XCTAssertEqual(a.samples.count, FrameFingerprint.columns * FrameFingerprint.rows)
+        XCTAssertLessThan(a.difference(to: b), 1.5)
+    }
+
+    func testScrolledScreenIsDetectedAsChanged() throws {
+        let a = try XCTUnwrap(FrameFingerprint(pixelBuffer: buffer(fill: 40, stripeAt: 20)))
+        let b = try XCTUnwrap(FrameFingerprint(pixelBuffer: buffer(fill: 40, stripeAt: 120)))
+        XCTAssertGreaterThan(a.difference(to: b), 1.5)
+    }
+}

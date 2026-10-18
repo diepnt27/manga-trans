@@ -11,6 +11,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var lastSignature = ""
     private var lastWrite: CFAbsoluteTime = 0
     private var settings = AppSettings.load()
+    private var lastFingerprint: FrameFingerprint?
+    private var lastRecognized: CFAbsoluteTime = 0
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         let defaults = AppGroup.defaults
@@ -56,6 +58,15 @@ final class SampleHandler: RPBroadcastSampleHandler {
             markIdle()
             return
         }
+        // Màn hình đứng yên (đang đọc) → bỏ qua OCR, chỉ quét lại thưa (10 giây) phòng khi sót.
+        if let fingerprint = FrameFingerprint(pixelBuffer: pixelBuffer) {
+            if let last = lastFingerprint, fingerprint.difference(to: last) < 1.5, now - lastRecognized < 10 {
+                markIdle()
+                return
+            }
+            lastFingerprint = fingerprint
+        }
+        lastRecognized = now
         let orientation = Self.orientation(of: sampleBuffer)
         queue.async { [weak self] in
             guard let self else { return }

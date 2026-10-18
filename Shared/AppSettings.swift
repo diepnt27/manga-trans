@@ -149,8 +149,16 @@ struct AppSettings {
         SettingsKey.marginBottom: 0.08,
     ]
 
+    /// Chỉ đăng ký 1 lần: mỗi lần `register(defaults:)` iOS lại phát "cài đặt đã đổi",
+    /// gọi liên tục (mỗi lần đọc cài đặt) gây vòng lặp vẽ lại cửa sổ nổi không ngừng.
+    private static let registerSharedOnce: Void = AppGroup.defaults.register(defaults: defaultValues)
+
     static func registerDefaults(_ defaults: UserDefaults = AppGroup.defaults) {
-        defaults.register(defaults: defaultValues)
+        if defaults === AppGroup.defaults {
+            _ = registerSharedOnce
+        } else {
+            defaults.register(defaults: defaultValues)
+        }
     }
 
     static func load(_ d: UserDefaults = AppGroup.defaults) -> AppSettings {
