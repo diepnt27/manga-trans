@@ -26,7 +26,7 @@ struct RootView: View {
             HomeView(pip: coordinator.pip)
                 .tabItem { Label("Trang chủ", systemImage: "house") }
                 .tag(0)
-            BrowserView(model: coordinator.browser)
+            BrowserView(tabs: coordinator.tabs)
                 .tabItem { Label("Trình duyệt", systemImage: "safari") }
                 .tag(1)
             SettingsView()

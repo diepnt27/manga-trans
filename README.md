@@ -112,6 +112,7 @@ Tab **Trình duyệt** là một trình duyệt web bên trong app, mở đượ
 - Nút **khung / bóng thoại** trên thanh công cụ đổi cách hiện bản dịch:
   - **Khung dịch nổi**: khung ở trên trang, kéo phần đầu khung để di chuyển, bấm ⌃ để thu gọn.
   - **Đè lên bóng thoại**: chữ Việt hiện đúng chỗ chữ Anh, tự ẩn khi đang cuộn.
+- **Nhiều tab** (tối đa 6) để đọc nhiều truyện cùng lúc: nút ô vuông có số trên thanh công cụ → chạm tab để chuyển, ✕ để đóng, **＋ Tab mới**. Mỗi tab nhớ trang và ngữ cảnh dịch riêng; app nhớ các tab cho lần sau.
 - Nút **☆** lưu dấu trang, nút **📖** mở danh sách dấu trang. App nhớ trang bạn xem lần cuối.
 - Nút **bong bóng chữ** bật/tắt dịch.
 - Đăng nhập, cookie và quảng cáo của trình duyệt trong app tách riêng với Safari. Cửa sổ quảng cáo tự bật lên sẽ bị chặn.

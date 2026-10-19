@@ -22,7 +22,7 @@ final class TranslationCoordinator: ObservableObject {
 
     let pip = PiPManager()
     let translation = TranslationService()
-    private(set) lazy var browser = BrowserModel(translation: translation)
+    private(set) lazy var tabs = BrowserTabs(translation: translation)
 
     private var filter = ScreenFilter()
     private var displayedKeys: [String] = []

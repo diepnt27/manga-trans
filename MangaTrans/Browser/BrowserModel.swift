@@ -5,7 +5,15 @@ import WebKit
 /// Chế độ Trình duyệt: mở trang truyện ngay trong app, chụp vùng web đang hiển thị khi ngừng cuộn,
 /// nhận dạng chữ rồi dịch — không cần quay màn hình.
 @MainActor
-final class BrowserModel: NSObject, ObservableObject {
+final class BrowserModel: NSObject, ObservableObject, Identifiable {
+    let id = UUID()
+    /// Trang mở lần đầu của tab (khôi phục từ lần trước).
+    let initialURL: String?
+    /// Gọi khi tải xong một trang — để lưu danh sách tab.
+    var onPageFinished: (() -> Void)?
+    /// Ảnh thu nhỏ cho danh sách tab.
+    @Published private(set) var thumbnail: UIImage?
+
     /// Bản dịch đặt đè lên một bóng thoại.
     struct Overlay: Identifiable, Equatable {
         let id: Int
@@ -78,11 +86,12 @@ final class BrowserModel: NSObject, ObservableObject {
     /// Các bóng thoại đang hiện trong khung dịch.
     private var focusedKeys: Set<String> = []
 
-    private let lastURLKey = "browserLastURL"
+    static let lastURLKey = "browserLastURL"
     private let bookmarksKey = "browserBookmarks"
 
-    init(translation: TranslationService) {
+    init(translation: TranslationService, initialURL: String? = nil) {
         self.translation = translation
+        self.initialURL = initialURL
         let configuration = WKWebViewConfiguration()
         // Một số trang chỉ hiện đúng giao diện cho Safari.
         configuration.applicationNameForUserAgent = "Version/18.0 Mobile/15E148 Safari/604.1"
@@ -101,7 +110,29 @@ final class BrowserModel: NSObject, ObservableObject {
 
     func restoreIfNeeded() {
         guard !hasPage else { return }
-        load(UserDefaults.standard.string(forKey: lastURLKey) ?? Self.homeURL)
+        load(initialURL ?? Self.homeURL)
+    }
+
+    func reloadBookmarks() {
+        bookmarks = loadBookmarks()
+    }
+
+    func captureThumbnail() {
+        guard hasPage, webView.bounds.width > 0 else { return }
+        let configuration = WKSnapshotConfiguration()
+        configuration.snapshotWidth = 240
+        webView.takeSnapshot(with: configuration) { [weak self] image, _ in
+            Task { @MainActor in self?.thumbnail = image }
+        }
+    }
+
+    /// Đóng tab: dừng tải, huỷ mọi việc đang chạy.
+    func close() {
+        webView.stopLoading()
+        scanTimer?.invalidate()
+        followUpTimer?.invalidate()
+        translateTask?.cancel()
+        observations = []
     }
 
     func load(_ input: String) {
@@ -119,7 +150,6 @@ final class BrowserModel: NSObject, ObservableObject {
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
             modifiedSince: .distantPast
         ) {}
-        UserDefaults.standard.removeObject(forKey: lastURLKey)
     }
 
     /// Chỉ mở trang web; chặn link gọi điện, mở app khác, file trên máy, scheme lạ.
@@ -299,7 +329,8 @@ final class BrowserModel: NSObject, ObservableObject {
         captureBlocks(afterScreenUpdates: false) { [weak self] blocks in
             guard let self else { return }
             // Chỉ dịch bóng thoại thấy ở 2 lần quét liên tiếp — bỏ qua đoạn lướt nhanh và bóng thoại bị cắt ở mép.
-            self.translation.prefetch(blocks.filter { self.previousPrefetchKeys.contains($0.key) }, settings: AppSettings.load())
+            self.translation.prefetch(blocks.filter { self.previousPrefetchKeys.contains($0.key) }, settings: AppSettings.load(),
+                                     conversation: self.id.uuidString)
             self.previousPrefetchKeys = Set(blocks.map(\.key))
         }
     }
@@ -400,7 +431,7 @@ final class BrowserModel: NSObject, ObservableObject {
         translateTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let results = try await self.translation.translate(blocks, settings: settings)
+                let results = try await self.translation.translate(blocks, settings: settings, conversation: self.id.uuidString)
                 guard !Task.isCancelled else { return }
                 self.status = "Đã dịch \(blocks.count) bóng thoại"
                 self.show(blocks, results.map { ($0, .done) }, generation: scanGeneration)
@@ -448,9 +479,7 @@ extension BrowserModel: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if let url = webView.url?.absoluteString {
-            UserDefaults.standard.set(url, forKey: lastURLKey)
-        }
+        onPageFinished?()
         scheduleScan(after: 0.6)
     }
 }

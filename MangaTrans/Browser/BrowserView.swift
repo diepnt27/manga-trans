@@ -10,8 +10,27 @@ enum BrowserDisplayMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Tab Trình duyệt: hiện tab đang chọn; đổi tab thì dựng lại trang (mỗi tab giữ trình duyệt riêng).
 struct BrowserView: View {
+    @ObservedObject var tabs: BrowserTabs
+    @State private var showTabs = false
+
+    var body: some View {
+        BrowserPage(model: tabs.current, tabCount: tabs.tabs.count) {
+            tabs.current.captureThumbnail()
+            showTabs = true
+        }
+        .id(tabs.current.id)
+        .sheet(isPresented: $showTabs) {
+            TabSwitcher(tabs: tabs) { showTabs = false }
+        }
+    }
+}
+
+struct BrowserPage: View {
     @ObservedObject var model: BrowserModel
+    let tabCount: Int
+    let showTabs: () -> Void
     @AppStorage("browserDisplayMode") private var displayMode: BrowserDisplayMode = .panel
     @State private var address = ""
     @State private var showBookmarks = false
@@ -115,7 +134,21 @@ struct BrowserView: View {
             toolbarButton("chevron.forward", enabled: model.canGoForward) { model.goForward() }
             toolbarButton(model.isLoading ? "xmark" : "arrow.clockwise") { model.reload() }
             toolbarButton(model.isBookmarked ? "star.fill" : "star") { model.toggleBookmark() }
-            toolbarButton("book") { showBookmarks = true }
+            toolbarButton("book") {
+                model.reloadBookmarks()
+                showBookmarks = true
+            }
+            Button(action: showTabs) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(Color.primary, lineWidth: 1.8)
+                        .frame(width: 21, height: 21)
+                    Text("\(tabCount)").font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 36)
+            }
+            .accessibilityLabel("Các tab (\(tabCount))")
             toolbarButton(displayMode == .panel ? "rectangle.topthird.inset.filled" : "text.bubble.fill") {
                 displayMode = displayMode == .panel ? .overlay : .panel
             }
@@ -439,5 +472,101 @@ enum PanelLayout {
         let x = min(max(frame.minX, 0), max(0, container.width - width))
         let y = min(max(frame.minY, 0), max(0, container.height - height))
         return CGRect(x: x, y: y, width: width, height: height)
+    }
+}
+
+/// Danh sách tab dạng lưới (giống Safari): chạm để chuyển, ✕ để đóng, ＋ để mở tab mới.
+private struct TabSwitcher: View {
+    @ObservedObject var tabs: BrowserTabs
+    let dismiss: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
+                    ForEach(tabs.tabs) { tab in
+                        TabCard(model: tab, isSelected: tab.id == tabs.selectedID) {
+                            tabs.select(tab.id)
+                            dismiss()
+                        } close: {
+                            withAnimation { tabs.close(tab.id) }
+                        }
+                    }
+                }
+                .padding(16)
+                if !tabs.canAddTab {
+                    Text("Tối đa \(BrowserTabs.maxTabs) tab. Đóng bớt tab để mở tab mới.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                }
+            }
+            .background(Color.black)
+            .navigationTitle("\(tabs.tabs.count) tab")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        tabs.newTab()
+                        dismiss()
+                    } label: {
+                        Label("Tab mới", systemImage: "plus")
+                    }
+                    .disabled(!tabs.canAddTab)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Xong", action: dismiss).fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
+private struct TabCard: View {
+    @ObservedObject var model: BrowserModel
+    let isSelected: Bool
+    let select: () -> Void
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(action: select) {
+                ZStack {
+                    Color(white: 0.12)
+                    if let thumbnail = model.thumbnail {
+                        Image(uiImage: thumbnail)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "doc.text.image")
+                            .font(.system(size: 30))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .aspectRatio(3 / 4, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(isSelected ? Color.accentColor : Color.white.opacity(0.12),
+                                      lineWidth: isSelected ? 3 : 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .topTrailing) {
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.black.opacity(0.65), in: Circle())
+                }
+                .padding(6)
+                .accessibilityLabel("Đóng tab")
+            }
+            Text(model.title.isEmpty ? (URL(string: model.currentURL)?.host ?? "Tab mới") : model.title)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+        }
     }
 }

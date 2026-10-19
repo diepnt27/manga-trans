@@ -109,7 +109,7 @@ struct SettingsView: View {
                         .confirmationDialog("Xoá cookie, bộ nhớ đệm và lịch sử đăng nhập của trình duyệt?",
                                             isPresented: $showClearConfirm, titleVisibility: .visible) {
                             Button("Xoá", role: .destructive) {
-                                coordinator.browser.clearBrowsingData()
+                                coordinator.tabs.clearBrowsingData()
                                 clearedBrowsingData = true
                             }
                         }
