@@ -287,8 +287,8 @@ final class BrowserModel: NSObject, ObservableObject {
             return
         }
         let scanGeneration = generation
-        captureLines(afterScreenUpdates: true) { [weak self] lines, size in
-            self?.process(lines, imageSize: size, generation: scanGeneration, followUp: followUp)
+        captureBlocks(afterScreenUpdates: true) { [weak self] blocks in
+            self?.process(blocks, generation: scanGeneration, followUp: followUp)
         }
     }
 
@@ -296,17 +296,16 @@ final class BrowserModel: NSObject, ObservableObject {
     private func prefetchScan() {
         guard isTranslationEnabled, hasPage, webView.bounds.width > 0 else { return }
         lastPrefetchScan = Date()
-        captureLines(afterScreenUpdates: false) { [weak self] lines, size in
+        captureBlocks(afterScreenUpdates: false) { [weak self] blocks in
             guard let self else { return }
-            let blocks = Self.makeBlocks(lines, imageSize: size)
             // Chỉ dịch bóng thoại thấy ở 2 lần quét liên tiếp — bỏ qua đoạn lướt nhanh và bóng thoại bị cắt ở mép.
             self.translation.prefetch(blocks.filter { self.previousPrefetchKeys.contains($0.key) }, settings: AppSettings.load())
             self.previousPrefetchKeys = Set(blocks.map(\.key))
         }
     }
 
-    /// Chụp vùng web đang hiển thị rồi nhận dạng chữ (chạy nền).
-    private func captureLines(afterScreenUpdates: Bool, _ handler: @escaping ([OCRLine], CGSize) -> Void) {
+    /// Chụp vùng web đang hiển thị, nhận dạng chữ và gom bóng thoại (chạy nền).
+    private func captureBlocks(afterScreenUpdates: Bool, _ handler: @escaping ([TextBlock]) -> Void) {
         isScanning = true
         let configuration = WKSnapshotConfiguration()
         configuration.afterScreenUpdates = afterScreenUpdates
@@ -316,6 +315,7 @@ final class BrowserModel: NSObject, ObservableObject {
             configuration.snapshotWidth = NSNumber(value: Double(webView.bounds.width * 2 / screenScale))
         }
         let minimumTextHeight = Self.minimumTextHeight
+        let bubbleOnly = AppSettings.load().bubbleTextOnly
         webView.takeSnapshot(with: configuration) { [weak self] image, _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -323,20 +323,25 @@ final class BrowserModel: NSObject, ObservableObject {
                     self.finishScan()
                     return
                 }
-                let size = CGSize(width: cgImage.width, height: cgImage.height)
-                let lines = await Task.detached(priority: .userInitiated) {
-                    (try? TextRecognizer.recognize(cgImage: cgImage, accuracy: .accurate,
-                                                   minimumTextHeight: minimumTextHeight)) ?? []
+                let blocks = await Task.detached(priority: .userInitiated) { () -> [TextBlock] in
+                    let lines = (try? TextRecognizer.recognize(cgImage: cgImage, accuracy: .accurate,
+                                                               minimumTextHeight: minimumTextHeight)) ?? []
+                    guard !lines.isEmpty else { return [] }
+                    let background = bubbleOnly ? LuminanceImage(cgImage: cgImage) : nil
+                    return Self.makeBlocks(lines, imageSize: CGSize(width: cgImage.width, height: cgImage.height),
+                                           background: background)
                 }.value
-                handler(lines, size)
+                handler(blocks)
                 self.finishScan()
             }
         }
     }
 
-    private static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize) -> [TextBlock] {
+    /// `background` có thì chỉ giữ chữ nằm trong bóng thoại / khung lời dẫn (nền đồng màu).
+    nonisolated static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize, background: LuminanceImage?) -> [TextBlock] {
         TextGrouper.group(lines.filter { $0.confidence >= 0.3 }, imageSize: imageSize)
-            .filter { TextNormalizer.letterCount($0.displayText) >= 2 }
+            .filter { !BubbleFilter.isNoise($0) }
+            .filter { block in background.map { BubbleFilter.isInBubble(block, in: $0) } ?? true }
     }
 
     private func finishScan() {
@@ -349,11 +354,9 @@ final class BrowserModel: NSObject, ObservableObject {
         }
     }
 
-    private func process(_ lines: [OCRLine], imageSize: CGSize, generation scanGeneration: Int, followUp: Bool) {
+    private func process(_ blocks: [TextBlock], generation scanGeneration: Int, followUp: Bool) {
         // Đã cuộn tiếp trong lúc nhận dạng → khung hình cũ, bỏ.
         guard scanGeneration == generation, isTranslationEnabled else { return }
-
-        let blocks = Self.makeBlocks(lines, imageSize: imageSize)
 
         if followUp && blocks.isEmpty {
             // Chưa thấy chữ — có thể ảnh truyện còn đang tải → quét lại một lần sau khi dừng.
@@ -362,6 +365,7 @@ final class BrowserModel: NSObject, ObservableObject {
                 Task { @MainActor in self?.scan(followUp: false) }
             }
         }
+
         let keys = blocks.map(\.key)
         if keys == lastKeys && scanGeneration == lastGeneration { return }
         lastKeys = keys

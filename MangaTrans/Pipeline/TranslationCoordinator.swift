@@ -136,7 +136,7 @@ final class TranslationCoordinator: ObservableObject {
 
         let lines = filter.filter(frame.lines)
         let allBlocks = TextGrouper.group(lines, imageSize: CGSize(width: frame.width, height: frame.height))
-            .filter { TextNormalizer.letterCount($0.displayText) >= 2 && !filter.isEchoOfTranslation($0) }
+            .filter { !BubbleFilter.isNoise($0) && !filter.isEchoOfTranslation($0) }
 
         // Dịch trước: bóng thoại có ở 2 lần quét liên tiếp (kể cả khi đang cuộn) thì dịch sẵn vào cache,
         // dừng lại là hiện ngay. Bóng thoại bị cắt ở mép màn hình đổi chữ liên tục nên không bị dịch nhầm.

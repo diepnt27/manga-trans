@@ -18,6 +18,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
     @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .middle
     @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 1
+    @AppStorage(SettingsKey.bubbleTextOnly, store: AppGroup.defaults) private var bubbleTextOnly = true
     @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 0.8
     @AppStorage(SettingsKey.ocrAccuracy, store: AppGroup.defaults) private var ocrAccuracy: OCRAccuracy = .accurate
     @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.6
@@ -150,6 +151,7 @@ struct SettingsView: View {
                     Picker("Độ chính xác OCR", selection: $ocrAccuracy) {
                         ForEach(OCRAccuracy.allCases) { Text($0.title).tag($0) }
                     }
+                    Toggle("Chỉ dịch chữ trong bóng thoại", isOn: $bubbleTextOnly)
                     Toggle("Dịch trước khi đang cuộn", isOn: $prefetchWhileScrolling)
                     slider("Quét mỗi", value: $scanInterval, range: 0.3...2.0, step: 0.1, format: "%.1f giây")
                     slider("Chờ đứng yên", value: $stableDelay, range: 0.2...2.0, step: 0.1, format: "%.1f giây")

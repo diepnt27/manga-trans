@@ -107,6 +107,7 @@ enum SettingsKey {
     static let readingZone = "readingZone"
     /// Người dùng đã đồng ý cho gửi chữ nhận dạng được tới bộ dịch (Apple yêu cầu hỏi trước).
     static let translationConsent = "translationConsent"
+    static let bubbleTextOnly = "bubbleTextOnly"
     static let translationConsentAsked = "translationConsentAsked"
     static let maxBubbles = "maxBubbles"
 
@@ -142,6 +143,8 @@ struct AppSettings {
     var prefetchWhileScrolling: Bool
     var readingZone: ReadingZone
     var translationConsent: Bool
+    /// Chỉ dịch chữ trong bóng thoại / khung lời dẫn, bỏ chữ hiệu ứng và watermark vẽ đè lên tranh.
+    var bubbleTextOnly: Bool
     /// Số bóng thoại tối đa hiện mỗi lần.
     var maxBubbles: Int
 
@@ -158,6 +161,7 @@ struct AppSettings {
         SettingsKey.prefetchWhileScrolling: false,
         SettingsKey.readingZone: ReadingZone.middle.rawValue,
         SettingsKey.maxBubbles: 1,
+        SettingsKey.bubbleTextOnly: true,
         SettingsKey.ocrAccuracy: OCRAccuracy.accurate.rawValue,
         SettingsKey.marginTop: 0.05,
         SettingsKey.marginBottom: 0.08,
@@ -202,6 +206,7 @@ struct AppSettings {
             prefetchWhileScrolling: d.bool(forKey: SettingsKey.prefetchWhileScrolling),
             readingZone: ReadingZone(rawValue: string(SettingsKey.readingZone)) ?? .middle,
             translationConsent: d.bool(forKey: SettingsKey.translationConsent),
+            bubbleTextOnly: d.bool(forKey: SettingsKey.bubbleTextOnly),
             maxBubbles: min(6, max(1, d.integer(forKey: SettingsKey.maxBubbles)))
         )
     }

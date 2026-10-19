@@ -396,3 +396,43 @@ final class PrivacyAndSecurityTests: XCTestCase {
         XCTAssertFalse(BrowserModel.isAllowedNavigation(URL(string: "file:///etc/passwd")))
     }
 }
+
+final class BubbleFilterTests: XCTestCase {
+    private func block(_ text: String, confidence: Float = 0.95, rect: CGRect = CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.04)) -> TextBlock {
+        TextGrouper.group([OCRLine(text: text, confidence: confidence, x: Double(rect.minX), y: Double(rect.minY),
+                                   w: Double(rect.width), h: Double(rect.height))],
+                          imageSize: CGSize(width: 200, height: 400))[0]
+    }
+
+    private func image(_ value: (Int, Int) -> UInt8) -> LuminanceImage {
+        var pixels: [UInt8] = []
+        for y in 0..<400 { for x in 0..<200 { pixels.append(value(x, y)) } }
+        return LuminanceImage(width: 200, height: 400, pixels: pixels)
+    }
+
+    func testTextOnPlainBubbleIsKept() {
+        // Nền trắng, chữ đen nằm đúng trong khung chữ.
+        let bubble = image { x, y in (60..<140).contains(x) && (120..<136).contains(y) ? 0 : 255 }
+        XCTAssertTrue(BubbleFilter.isInBubble(block("IT SEEMS HE'S TRYING TO FIGHT ME HERE."), in: bubble))
+    }
+
+    func testTextOverArtworkIsDropped() {
+        // Nền lổn nhổn như tranh vẽ.
+        var seed: UInt32 = 12345
+        let art = image { _, _ in
+            seed = seed &* 1_103_515_245 &+ 12345
+            return UInt8(truncatingIfNeeded: seed >> 16)
+        }
+        XCTAssertFalse(BubbleFilter.isInBubble(block("TING"), in: art))
+    }
+
+    func testNoiseText() {
+        XCTAssertTrue(BubbleFilter.isNoise(block("REAPERSCANS.COM")))
+        XCTAssertTrue(BubbleFilter.isNoise(block("www.mangaread.org")))
+        XCTAssertTrue(BubbleFilter.isNoise(block("TINg")))
+        XCTAssertTrue(BubbleFilter.isNoise(block("NO", confidence: 0.4)))
+        XCTAssertFalse(BubbleFilter.isNoise(block("WHAT?!")))
+        XCTAssertFalse(BubbleFilter.isNoise(block("SCAN THE AREA NOW")))
+        XCTAssertFalse(BubbleFilter.isNoise(block("...WHO TOLD YOU TO LEAVE THEM ALONE LIKE THAT?")))
+    }
+}
