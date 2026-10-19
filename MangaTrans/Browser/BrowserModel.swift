@@ -438,6 +438,7 @@ extension BrowserModel: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        SpeechReader.shared.stop()
         overlays = []
         entries = []
         lastKeys = []

@@ -158,6 +158,7 @@ struct WebViewHost: UIViewRepresentable {
 /// Khung dịch nổi: kéo được, thu gọn được.
 private struct TranslationPanel: View {
     @ObservedObject var model: BrowserModel
+    @ObservedObject private var speech = SpeechReader.shared
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
     // Vị trí & kích thước khung (tỉ lệ theo vùng web) — nhớ giữa các lần mở app.
     @AppStorage("panelX") private var storedX = Double(PanelLayout.defaultFrame.minX)
@@ -270,6 +271,14 @@ private struct TranslationPanel: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
+            // Loa: đọc to câu tiếng Anh của các bóng thoại đang hiện; bấm lần nữa để dừng.
+            Button { speech.toggle(model.entries.map(\.original)) } label: {
+                Image(systemName: speech.isSpeaking ? "speaker.wave.2.fill" : "speaker.wave.2")
+                    .foregroundStyle(speech.isSpeaking ? Color.orange : Color.accentColor)
+                    .frame(width: 34, height: 24)
+            }
+            .disabled(model.entries.isEmpty)
+            .accessibilityLabel(speech.isSpeaking ? "Dừng đọc" : "Đọc câu tiếng Anh")
             Button { model.rescan() } label: {
                 Image(systemName: "arrow.triangle.2.circlepath").frame(width: 30, height: 24)
             }
