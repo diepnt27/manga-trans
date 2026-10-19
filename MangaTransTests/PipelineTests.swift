@@ -410,20 +410,35 @@ final class BubbleFilterTests: XCTestCase {
         return LuminanceImage(width: 200, height: 400, pixels: pixels)
     }
 
-    func testTextOnPlainBubbleIsKept() {
-        // Nền trắng, chữ đen nằm đúng trong khung chữ.
-        let bubble = image { x, y in (60..<140).contains(x) && (120..<136).contains(y) ? 0 : 255 }
-        XCTAssertTrue(BubbleFilter.isInBubble(block("IT SEEMS HE'S TRYING TO FIGHT ME HERE."), in: bubble))
+    private func line(_ text: String, _ rect: CGRect) -> OCRLine {
+        OCRLine(text: text, confidence: 0.95, x: Double(rect.minX), y: Double(rect.minY),
+                w: Double(rect.width), h: Double(rect.height))
     }
 
-    func testTextOverArtworkIsDropped() {
-        // Nền lổn nhổn như tranh vẽ.
+    private func contains(_ rect: CGRect, _ x: Int, _ y: Int) -> Bool {
+        rect.contains(CGPoint(x: (Double(x) + 0.5) / 200, y: (Double(y) + 0.5) / 400))
+    }
+
+    func testMultiLineBubbleIsKept() {
+        // Bóng thoại trắng, 2 dòng chữ đen sát nhau.
+        let first = CGRect(x: 0.3, y: 0.30, width: 0.4, height: 0.03)
+        let second = CGRect(x: 0.3, y: 0.34, width: 0.4, height: 0.03)
+        let bubble = image { x, y in self.contains(first, x, y) || self.contains(second, x, y) ? 0 : 255 }
+        let kept = BubbleFilter.linesOnPlainBackground([line("BOTH OF", first), line("YOU HAVE GREAT", second)], in: bubble)
+        XCTAssertEqual(kept.map(\.text), ["BOTH OF", "YOU HAVE GREAT"])
+    }
+
+    func testTextOverArtworkNextToBubbleIsDropped() {
+        // Nửa trái là bóng thoại trắng, nửa phải là tranh (nền lổn nhổn) có chữ "Hahaha!" vẽ đè.
         var seed: UInt32 = 12345
-        let art = image { _, _ in
+        let page = image { x, _ in
+            if x < 100 { return 255 }
             seed = seed &* 1_103_515_245 &+ 12345
             return UInt8(truncatingIfNeeded: seed >> 16)
         }
-        XCTAssertFalse(BubbleFilter.isInBubble(block("TING"), in: art))
+        let dialogue = line("BOTH OF YOU", CGRect(x: 0.1, y: 0.4, width: 0.3, height: 0.03))
+        let effect = line("Hahaha!", CGRect(x: 0.62, y: 0.4, width: 0.25, height: 0.03))
+        XCTAssertEqual(BubbleFilter.linesOnPlainBackground([dialogue, effect], in: page).map(\.text), ["BOTH OF YOU"])
     }
 
     func testNoiseText() {
@@ -435,5 +450,30 @@ final class BubbleFilterTests: XCTestCase {
         XCTAssertFalse(BubbleFilter.isNoise(block("SCAN THE AREA NOW")))
         XCTAssertFalse(BubbleFilter.isNoise(block("I WANTED...TO SEE YOU AGAIN.")))
         XCTAssertFalse(BubbleFilter.isNoise(block("...WHO TOLD YOU TO LEAVE THEM ALONE LIKE THAT?")))
+    }
+}
+
+final class BubbleQueueFuzzyTests: XCTestCase {
+    private func block(_ text: String, y: Double) -> TextBlock {
+        TextGrouper.group([OCRLine(text: text, confidence: 1, x: 0.1, y: y, w: 0.5, h: 0.02)],
+                          imageSize: CGSize(width: 1000, height: 2000))[0]
+    }
+
+    func testSlightlyDifferentOcrCountsAsAlreadyShown() {
+        var queue = BubbleQueue()
+        let first = queue.select([block("BOTH OF YOU HAVE GREAT FOCUS.", y: 0.4)], maxCount: 1)
+        queue.markShown(first)
+
+        // Cuộn xuống: OCR đọc thêm "Hahaha!" vào bóng cũ, bóng mới hiện ra bên dưới.
+        let next = queue.select([
+            block("Hahaha! BOTH OF YOU HAVE GREAT FOCUS.", y: 0.25),
+            block("AS EXPECTED OF THE TEAM LEADERS WHO PASSED THE SECOND TEST.", y: 0.55),
+        ], maxCount: 1)
+        XCTAssertEqual(next.map(\.displayText), ["AS EXPECTED OF THE TEAM LEADERS WHO PASSED THE SECOND TEST."])
+    }
+
+    func testShortBubblesAreNotMatchedLoosely() {
+        XCTAssertFalse(BubbleQueue.isSameBubble(["no"], ["no", "way"]))
+        XCTAssertTrue(BubbleQueue.isSameBubble(["both", "of", "you", "have"], ["hahaha", "both", "of", "you", "have"]))
     }
 }

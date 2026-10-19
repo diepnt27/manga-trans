@@ -339,9 +339,10 @@ final class BrowserModel: NSObject, ObservableObject {
 
     /// `background` có thì chỉ giữ chữ nằm trong bóng thoại / khung lời dẫn (nền đồng màu).
     nonisolated static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize, background: LuminanceImage?) -> [TextBlock] {
-        TextGrouper.group(lines.filter { $0.confidence >= 0.3 }, imageSize: imageSize)
+        let confident = lines.filter { $0.confidence >= 0.3 }
+        let inBubbles = background.map { BubbleFilter.linesOnPlainBackground(confident, in: $0) } ?? confident
+        return TextGrouper.group(inBubbles, imageSize: imageSize)
             .filter { !BubbleFilter.isNoise($0) }
-            .filter { block in background.map { BubbleFilter.isInBubble(block, in: $0) } ?? true }
     }
 
     private func finishScan() {

@@ -10,12 +10,16 @@ struct BubbleQueue {
 
     private var shown: Set<String> = []
     private var shownOrder: [String] = []
+    /// Bộ từ của các bóng thoại đã hiện gần đây — nhận ra cùng bóng thoại dù OCR đọc hơi khác
+    /// (thêm/bớt một chữ hiệu ứng, sai 1 từ).
+    private var recentTokens: [Set<String>] = []
     /// Bóng thoại đang hiện → vị trí (tâm theo chiều dọc) lúc hiện.
     private var displayed: [String: Double] = [:]
 
     mutating func reset() {
         shown = []
         shownOrder = []
+        recentTokens = []
         displayed = [:]
     }
 
@@ -23,9 +27,9 @@ struct BubbleQueue {
     func select(_ blocks: [TextBlock], maxCount: Int) -> [TextBlock] {
         let limit = max(1, maxCount)
         if !displayed.isEmpty && !hasScrolled(blocks) {
-            return blocks.filter { displayed[$0.key] != nil }
+            return blocks.filter { displayedMidY(for: $0) != nil }
         }
-        let unseen = blocks.filter { !shown.contains($0.key) }
+        let unseen = blocks.filter { !wasShown($0.key) }
         return Array((unseen.isEmpty ? blocks : unseen).prefix(limit))
     }
 
@@ -35,7 +39,9 @@ struct BubbleQueue {
         displayed = Dictionary(blocks.map { ($0.key, Double($0.rect.midY)) }, uniquingKeysWith: { first, _ in first })
         for block in blocks where shown.insert(block.key).inserted {
             shownOrder.append(block.key)
+            recentTokens.append(Self.tokens(block.key))
         }
+        if recentTokens.count > 100 { recentTokens.removeFirst(recentTokens.count - 100) }
         if shownOrder.count > Self.memoryLimit {
             let overflow = shownOrder.count - Self.memoryLimit
             shownOrder.prefix(overflow).forEach { shown.remove($0) }
@@ -44,11 +50,34 @@ struct BubbleQueue {
     }
 
     private func hasScrolled(_ blocks: [TextBlock]) -> Bool {
-        let stillVisible = blocks.filter { displayed[$0.key] != nil }
+        let stillVisible = blocks.compactMap { block in displayedMidY(for: block).map { (block, $0) } }
         // Các bóng đang hiện đã ra khỏi màn hình.
         guard !stillVisible.isEmpty else { return true }
-        return stillVisible.contains { block in
-            abs(Double(block.rect.midY) - (displayed[block.key] ?? 0)) > Self.moveThreshold
+        return stillVisible.contains { block, midY in
+            abs(Double(block.rect.midY) - midY) > Self.moveThreshold
         }
+    }
+
+    private func displayedMidY(for block: TextBlock) -> Double? {
+        if let exact = displayed[block.key] { return exact }
+        let tokens = Self.tokens(block.key)
+        return displayed.first { Self.isSameBubble(tokens, Self.tokens($0.key)) }?.value
+    }
+
+    private func wasShown(_ key: String) -> Bool {
+        if shown.contains(key) { return true }
+        let tokens = Self.tokens(key)
+        return recentTokens.contains { Self.isSameBubble(tokens, $0) }
+    }
+
+    private static func tokens(_ key: String) -> Set<String> {
+        Set(key.split(separator: " ").map(String.init))
+    }
+
+    /// Cùng một bóng thoại nếu ≥ 80% từ của bên ngắn hơn có trong bên kia (bên ngắn hơn có ít nhất 3 từ).
+    static func isSameBubble(_ a: Set<String>, _ b: Set<String>) -> Bool {
+        let shorter = min(a.count, b.count)
+        guard shorter >= 3 else { return false }
+        return Double(a.intersection(b).count) / Double(shorter) >= 0.8
     }
 }
