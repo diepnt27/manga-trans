@@ -83,6 +83,8 @@ jobs:
           mkdir -p lite/Payload
           cp -R "$APP" lite/Payload/
           rm -rf lite/Payload/MangaTrans.app/PlugIns
+          # Lite không có cửa sổ nổi → bỏ chế độ chạy nền "audio" (Apple từ chối nếu khai báo mà không dùng).
+          /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" lite/Payload/MangaTrans.app/Info.plist || true
           codesign -f -s - lite/Payload/MangaTrans.app
           (cd lite && zip -qry ../MangaTrans-Lite.ipa Payload)
 

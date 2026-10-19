@@ -6,6 +6,16 @@ enum TranslatorEngine: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Bản App Store (cờ biên dịch APPSTORE) bỏ Google miễn phí — endpoint web không chính thức,
+    /// trái điều khoản của Google, dễ bị Apple từ chối.
+    static var available: [TranslatorEngine] {
+        #if APPSTORE
+        return allCases.filter { $0 != .google }
+        #else
+        return allCases
+        #endif
+    }
+
     var title: String {
         switch self {
         case .google: return "Google (miễn phí)"
@@ -95,6 +105,9 @@ enum SettingsKey {
     static let marginBottom = "marginBottom"
     static let prefetchWhileScrolling = "prefetchWhileScrolling"
     static let readingZone = "readingZone"
+    /// Người dùng đã đồng ý cho gửi chữ nhận dạng được tới bộ dịch (Apple yêu cầu hỏi trước).
+    static let translationConsent = "translationConsent"
+    static let translationConsentAsked = "translationConsentAsked"
     static let maxBubbles = "maxBubbles"
 
     // Trạng thái nội bộ (extension ghi)
@@ -128,6 +141,7 @@ struct AppSettings {
     /// Dịch sẵn các bóng thoại khi đang cuộn để lúc dừng hiện ngay.
     var prefetchWhileScrolling: Bool
     var readingZone: ReadingZone
+    var translationConsent: Bool
     /// Số bóng thoại tối đa hiện mỗi lần.
     var maxBubbles: Int
 
@@ -169,12 +183,13 @@ struct AppSettings {
         let geminiModel = string(SettingsKey.geminiModel)
         let deepseekModel = string(SettingsKey.deepseekModel)
         return AppSettings(
-            engine: TranslatorEngine(rawValue: string(SettingsKey.engine)) ?? .google,
-            geminiKey: string(SettingsKey.geminiKey),
+            engine: TranslatorEngine.available.first { $0.rawValue == string(SettingsKey.engine) }
+                ?? TranslatorEngine.available[0],
+            geminiKey: SecretStore.value(for: SettingsKey.geminiKey),
             geminiModel: geminiModel.isEmpty ? defaultGeminiModel : geminiModel,
             geminiFastMode: d.bool(forKey: SettingsKey.geminiFastMode),
-            deepseekKey: string(SettingsKey.deepseekKey),
-            googleCloudKey: string(SettingsKey.googleCloudKey),
+            deepseekKey: SecretStore.value(for: SettingsKey.deepseekKey),
+            googleCloudKey: SecretStore.value(for: SettingsKey.googleCloudKey),
             deepseekModel: deepseekModel.isEmpty ? defaultDeepSeekModel : deepseekModel,
             windowSize: WindowSize(rawValue: string(SettingsKey.windowSize)) ?? .normal,
             showOriginal: d.bool(forKey: SettingsKey.showOriginal),
@@ -185,7 +200,8 @@ struct AppSettings {
             marginTop: d.double(forKey: SettingsKey.marginTop),
             marginBottom: d.double(forKey: SettingsKey.marginBottom),
             prefetchWhileScrolling: d.bool(forKey: SettingsKey.prefetchWhileScrolling),
-            readingZone: ReadingZone(rawValue: string(SettingsKey.readingZone)) ?? .full,
+            readingZone: ReadingZone(rawValue: string(SettingsKey.readingZone)) ?? .middle,
+            translationConsent: d.bool(forKey: SettingsKey.translationConsent),
             maxBubbles: min(6, max(1, d.integer(forKey: SettingsKey.maxBubbles)))
         )
     }

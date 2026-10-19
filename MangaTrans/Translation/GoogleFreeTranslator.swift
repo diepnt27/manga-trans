@@ -54,10 +54,10 @@ struct GoogleCloudTranslator: Translator {
     func translate(_ texts: [String], context: [TranslationPair]) async throws -> [String] {
         guard !apiKey.isEmpty else { throw TranslatorError.missingAPIKey("Google Cloud") }
         guard !texts.isEmpty else { return [] }
-        var components = URLComponents(string: "https://translation.googleapis.com/language/translate/v2")!
-        components.queryItems = [URLQueryItem(name: "key", value: apiKey)]
+        // Key gửi qua header (không đặt trên URL, tránh lọt vào log/proxy).
+        let url = URL(string: "https://translation.googleapis.com/language/translate/v2")!
         let body: [String: Any] = ["q": texts, "source": source, "target": target, "format": "text"]
-        let data = try await HTTP.postJSON(components.url!, body: body)
+        let data = try await HTTP.postJSON(url, body: body, headers: ["x-goog-api-key": apiKey])
         let results = try Self.parse(data)
         guard results.count == texts.count else { throw TranslatorError.invalidResponse }
         return results

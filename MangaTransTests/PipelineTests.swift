@@ -265,7 +265,9 @@ final class TranslationServiceTests: XCTestCase {
     func testPrefetchedBubbleIsNotTranslatedTwice() async throws {
         let fake = CountingTranslator()
         let service = TranslationService(makeTranslator: { _ in fake })
-        let settings = AppSettings.load(UserDefaults(suiteName: "tests")!)
+        let defaults = UserDefaults(suiteName: "tests")!
+        defaults.set(true, forKey: SettingsKey.translationConsent)
+        let settings = AppSettings.load(defaults)
         let a = block("HELLO THERE"), b = block("WHERE ARE YOU")
 
         // Đang cuộn: dịch trước A. Dừng lại: cần A và B ngay lúc A còn đang dịch.
@@ -367,5 +369,30 @@ final class FrameFingerprintTests: XCTestCase {
         let a = try XCTUnwrap(FrameFingerprint(pixelBuffer: buffer(fill: 40, stripeAt: 20)))
         let b = try XCTUnwrap(FrameFingerprint(pixelBuffer: buffer(fill: 40, stripeAt: 120)))
         XCTAssertGreaterThan(a.difference(to: b), 1.5)
+    }
+}
+
+@MainActor
+final class PrivacyAndSecurityTests: XCTestCase {
+    func testTranslationRequiresConsent() async {
+        let defaults = UserDefaults(suiteName: "tests-no-consent")!
+        defaults.set(false, forKey: SettingsKey.translationConsent)
+        let service = TranslationService(makeTranslator: { _ in CountingTranslator() })
+        let block = TextGrouper.group([OCRLine(text: "HELLO", confidence: 1, x: 0.1, y: 0.1, w: 0.3, h: 0.02)],
+                                      imageSize: CGSize(width: 1000, height: 2000))
+        do {
+            _ = try await service.translate(block, settings: AppSettings.load(defaults))
+            XCTFail("Không được dịch khi chưa đồng ý")
+        } catch {
+            XCTAssertEqual((error as? TranslatorError)?.errorDescription, TranslatorError.consentRequired.errorDescription)
+        }
+    }
+
+    func testBrowserOnlyOpensWebLinks() {
+        XCTAssertTrue(BrowserModel.isAllowedNavigation(URL(string: "https://example.com")))
+        XCTAssertTrue(BrowserModel.isAllowedNavigation(URL(string: "about:blank")))
+        XCTAssertFalse(BrowserModel.isAllowedNavigation(URL(string: "tel:123456")))
+        XCTAssertFalse(BrowserModel.isAllowedNavigation(URL(string: "itms-apps://apps.apple.com/app/id1")))
+        XCTAssertFalse(BrowserModel.isAllowedNavigation(URL(string: "file:///etc/passwd")))
     }
 }

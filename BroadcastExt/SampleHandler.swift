@@ -38,6 +38,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastFinished() {
         AppGroup.defaults.set(false, forKey: SettingsKey.broadcastActive)
         AppGroup.defaults.set(false, forKey: SettingsKey.ocrInFlight)
+        // Xoá chữ đã nhận dạng trên màn hình — không để lại dữ liệu sau khi dừng.
+        try? FileManager.default.removeItem(at: AppGroup.ocrFileURL)
         DarwinNotificationCenter.shared.post(DarwinName.broadcastFinished)
     }
 

@@ -113,6 +113,21 @@ final class BrowserModel: NSObject, ObservableObject {
     func goBack() { webView.goBack() }
     func goForward() { webView.goForward() }
 
+    /// Xoá cookie, bộ nhớ đệm, dữ liệu đăng nhập của các trang web và trang đọc dở.
+    func clearBrowsingData() {
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+            modifiedSince: .distantPast
+        ) {}
+        UserDefaults.standard.removeObject(forKey: lastURLKey)
+    }
+
+    /// Chỉ mở trang web; chặn link gọi điện, mở app khác, file trên máy, scheme lạ.
+    nonisolated static func isAllowedNavigation(_ url: URL?) -> Bool {
+        guard let scheme = url?.scheme?.lowercased() else { return true }
+        return ["http", "https", "about", "data", "blob"].contains(scheme)
+    }
+
     func reload() {
         if isLoading { webView.stopLoading() } else { webView.reload() }
     }
@@ -192,7 +207,12 @@ final class BrowserModel: NSObject, ObservableObject {
             webView.scrollView.observe(\.contentOffset, options: [.new]) { [weak self] scrollView, _ in
                 let offsetY = scrollView.contentOffset.y
                 let byUser = scrollView.isDragging || scrollView.isDecelerating
-                Task { @MainActor in self?.didScroll(offsetY: offsetY, byUser: byUser) }
+                // Gọi thẳng trên luồng chính (sự kiện cuộn luôn ở đó) thay vì tạo Task mỗi khung hình (tới 120 lần/giây).
+                if #available(iOS 17.0, *), Thread.isMainThread {
+                    MainActor.assumeIsolated { self?.didScroll(offsetY: offsetY, byUser: byUser) }
+                } else {
+                    Task { @MainActor in self?.didScroll(offsetY: offsetY, byUser: byUser) }
+                }
             },
         ]
     }
@@ -407,6 +427,11 @@ final class BrowserModel: NSObject, ObservableObject {
 }
 
 extension BrowserModel: WKNavigationDelegate {
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        Self.isAllowedNavigation(navigationAction.request.url) ? .allow : .cancel
+    }
+
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         overlays = []
         entries = []

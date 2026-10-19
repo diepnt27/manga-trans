@@ -4,11 +4,15 @@ struct SettingsView: View {
     @EnvironmentObject private var coordinator: TranslationCoordinator
 
     @AppStorage(SettingsKey.engine, store: AppGroup.defaults) private var engine: TranslatorEngine = .google
-    @AppStorage(SettingsKey.geminiKey, store: AppGroup.defaults) private var geminiKey = ""
     @AppStorage(SettingsKey.geminiModel, store: AppGroup.defaults) private var geminiModel = AppSettings.defaultGeminiModel
     @AppStorage(SettingsKey.geminiFastMode, store: AppGroup.defaults) private var geminiFastMode = true
-    @AppStorage(SettingsKey.deepseekKey, store: AppGroup.defaults) private var deepseekKey = ""
-    @AppStorage(SettingsKey.googleCloudKey, store: AppGroup.defaults) private var googleCloudKey = ""
+    // API key: lưu trong Keychain, không qua UserDefaults.
+    @State private var geminiKey = SecretStore.value(for: SettingsKey.geminiKey)
+    @State private var deepseekKey = SecretStore.value(for: SettingsKey.deepseekKey)
+    @State private var googleCloudKey = SecretStore.value(for: SettingsKey.googleCloudKey)
+    @AppStorage(SettingsKey.translationConsent, store: AppGroup.defaults) private var translationConsent = false
+    @State private var showClearConfirm = false
+    @State private var clearedBrowsingData = false
     @AppStorage(SettingsKey.deepseekModel, store: AppGroup.defaults) private var deepseekModel = AppSettings.defaultDeepSeekModel
     @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .small
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
@@ -31,7 +35,7 @@ struct SettingsView: View {
             Form {
                 Section {
                     Picker("Bộ dịch", selection: $engine) {
-                        ForEach(TranslatorEngine.allCases) { Text($0.title).tag($0) }
+                        ForEach(TranslatorEngine.available) { Text($0.title).tag($0) }
                     }
                     Button {
                         Task {
@@ -62,6 +66,7 @@ struct SettingsView: View {
                     SecureField("API key", text: $googleCloudKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .onChange(of: googleCloudKey) { SecretStore.set($0, for: SettingsKey.googleCloudKey) }
                 } header: {
                     Text("Google Cloud Translation")
                 } footer: {
@@ -72,6 +77,7 @@ struct SettingsView: View {
                     SecureField("API key", text: $geminiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .onChange(of: geminiKey) { SecretStore.set($0, for: SettingsKey.geminiKey) }
                     TextField("Model", text: $geminiModel)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -86,6 +92,7 @@ struct SettingsView: View {
                     SecureField("API key", text: $deepseekKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .onChange(of: deepseekKey) { SecretStore.set($0, for: SettingsKey.deepseekKey) }
                     TextField("Model", text: $deepseekModel)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -93,6 +100,26 @@ struct SettingsView: View {
                     Text("DeepSeek")
                 } footer: {
                     Text("Lấy key tại platform.deepseek.com. Mặc định: \(AppSettings.defaultDeepSeekModel).")
+                }
+
+                Section {
+                    Toggle("Cho phép gửi chữ đi dịch", isOn: $translationConsent)
+                    Button("Xoá dữ liệu duyệt web", role: .destructive) { showClearConfirm = true }
+                        .confirmationDialog("Xoá cookie, bộ nhớ đệm và lịch sử đăng nhập của trình duyệt?",
+                                            isPresented: $showClearConfirm, titleVisibility: .visible) {
+                            Button("Xoá", role: .destructive) {
+                                coordinator.browser.clearBrowsingData()
+                                clearedBrowsingData = true
+                            }
+                        }
+                    if clearedBrowsingData {
+                        Text("Đã xoá dữ liệu duyệt web.").foregroundStyle(.secondary)
+                    }
+                    Link("Chính sách quyền riêng tư", destination: AppLinks.privacyPolicy)
+                } header: {
+                    Text("Quyền riêng tư")
+                } footer: {
+                    Text("Chữ tiếng Anh nhận dạng được trên màn hình (không phải hình ảnh) được gửi tới bộ dịch bạn chọn để dịch. API key được lưu trong Keychain của máy. App không thu thập hay gửi dữ liệu nào khác.")
                 }
 
                 Section {

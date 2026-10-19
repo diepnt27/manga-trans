@@ -15,12 +15,14 @@ enum TranslatorError: LocalizedError {
     case missingAPIKey(String)
     case http(Int, String)
     case invalidResponse
+    case consentRequired
 
     var errorDescription: String? {
         switch self {
         case .missingAPIKey(let name): return "Chưa nhập API key \(name) trong Cài đặt."
         case .http(let code, let message): return "HTTP \(code): \(message)"
         case .invalidResponse: return "Phản hồi từ bộ dịch không hợp lệ."
+        case .consentRequired: return "Chưa cho phép gửi chữ đi dịch. Bật trong Cài đặt → Quyền riêng tư."
         }
     }
 }

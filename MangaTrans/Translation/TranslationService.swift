@@ -29,6 +29,7 @@ final class TranslationService {
 
     /// Bản dịch cho mọi bóng thoại theo đúng thứ tự; chỉ gọi bộ dịch cho những bóng chưa có trong cache.
     func translate(_ blocks: [TextBlock], settings: AppSettings) async throws -> [String] {
+        guard settings.translationConsent else { throw TranslatorError.consentRequired }
         let engine = settings.engine
 
         var newBlocks: [TextBlock] = []

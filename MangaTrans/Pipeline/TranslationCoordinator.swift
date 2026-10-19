@@ -80,6 +80,9 @@ final class TranslationCoordinator: ObservableObject {
 
     func testTranslation() async -> String {
         let settings = AppSettings.load()
+        guard settings.translationConsent else {
+            return "Lỗi: \(TranslatorError.consentRequired.localizedDescription)"
+        }
         do {
             let input = TextNormalizer.translationInput(Self.sampleText)
             let result = try await TranslatorFactory.make(settings).translate([input], context: [])

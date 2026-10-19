@@ -83,7 +83,7 @@ struct HomeView: View {
         VStack(spacing: 0) {
             row(icon: "character.book.closed", title: "Bộ dịch") {
                 Picker("Bộ dịch", selection: $engine) {
-                    ForEach(TranslatorEngine.allCases) { Text($0.title).tag($0) }
+                    ForEach(TranslatorEngine.available) { Text($0.title).tag($0) }
                 }
             }
             Divider().padding(.leading, 56)
