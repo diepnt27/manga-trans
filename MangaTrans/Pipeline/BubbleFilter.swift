@@ -80,7 +80,7 @@ enum BubbleFilter {
     }
 
     private static let watermark = try! NSRegularExpression(
-        pattern: "(https?://|www\\.|\\.(com|net|org|io|xyz|me|to|co)\\b|[a-z]+scans\\b|scanlation)",
+        pattern: "(https?://|www\\.|[a-z0-9-]\\.(com|net|org|io|xyz|me|to|co)\\b|[a-z]+scans\\b|scanlation)",
         options: [.caseInsensitive]
     )
 

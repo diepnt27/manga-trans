@@ -433,6 +433,7 @@ final class BubbleFilterTests: XCTestCase {
         XCTAssertTrue(BubbleFilter.isNoise(block("NO", confidence: 0.4)))
         XCTAssertFalse(BubbleFilter.isNoise(block("WHAT?!")))
         XCTAssertFalse(BubbleFilter.isNoise(block("SCAN THE AREA NOW")))
+        XCTAssertFalse(BubbleFilter.isNoise(block("I WANTED...TO SEE YOU AGAIN.")))
         XCTAssertFalse(BubbleFilter.isNoise(block("...WHO TOLD YOU TO LEAVE THEM ALONE LIKE THAT?")))
     }
 }
