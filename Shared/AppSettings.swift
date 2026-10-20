@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 enum TranslatorEngine: String, CaseIterable, Identifiable {
-    case google, googleCloud, gemini, deepseek
+    case google, googleCloud, gemini, deepseek, openRouter
 
     var id: String { rawValue }
 
@@ -22,6 +22,7 @@ enum TranslatorEngine: String, CaseIterable, Identifiable {
         case .googleCloud: return "Google Cloud (key)"
         case .gemini: return "Gemini"
         case .deepseek: return "DeepSeek"
+        case .openRouter: return "OpenRouter"
         }
     }
 }
@@ -95,6 +96,8 @@ enum SettingsKey {
     static let deepseekKey = "deepseekKey"
     static let googleCloudKey = "googleCloudKey"
     static let deepseekModel = "deepseekModel"
+    static let openRouterKey = "openRouterKey"
+    static let openRouterModel = "openRouterModel"
     static let windowSize = "windowSize"
     static let showOriginal = "showOriginal"
     static let fontScale = "fontScale"
@@ -120,6 +123,7 @@ enum SettingsKey {
 struct AppSettings {
     static let defaultGeminiModel = "gemini-3.6-flash"
     static let defaultDeepSeekModel = "deepseek-v4-flash"
+    static let defaultOpenRouterModel = "deepseek/deepseek-v4-flash"
 
     var engine: TranslatorEngine
     var geminiKey: String
@@ -128,6 +132,8 @@ struct AppSettings {
     var deepseekKey: String
     var googleCloudKey: String
     var deepseekModel: String
+    var openRouterKey: String
+    var openRouterModel: String
     var windowSize: WindowSize
     var showOriginal: Bool
     var fontScale: Double
@@ -153,6 +159,7 @@ struct AppSettings {
         SettingsKey.geminiModel: defaultGeminiModel,
         SettingsKey.geminiFastMode: true,
         SettingsKey.deepseekModel: defaultDeepSeekModel,
+        SettingsKey.openRouterModel: defaultOpenRouterModel,
         SettingsKey.windowSize: WindowSize.small.rawValue,
         SettingsKey.showOriginal: true,
         SettingsKey.fontScale: 0.8,
@@ -186,6 +193,7 @@ struct AppSettings {
         }
         let geminiModel = string(SettingsKey.geminiModel)
         let deepseekModel = string(SettingsKey.deepseekModel)
+        let openRouterModel = string(SettingsKey.openRouterModel)
         return AppSettings(
             engine: TranslatorEngine.available.first { $0.rawValue == string(SettingsKey.engine) }
                 ?? TranslatorEngine.available[0],
@@ -195,6 +203,8 @@ struct AppSettings {
             deepseekKey: SecretStore.value(for: SettingsKey.deepseekKey),
             googleCloudKey: SecretStore.value(for: SettingsKey.googleCloudKey),
             deepseekModel: deepseekModel.isEmpty ? defaultDeepSeekModel : deepseekModel,
+            openRouterKey: SecretStore.value(for: SettingsKey.openRouterKey),
+            openRouterModel: openRouterModel.isEmpty ? defaultOpenRouterModel : openRouterModel,
             windowSize: WindowSize(rawValue: string(SettingsKey.windowSize)) ?? .normal,
             showOriginal: d.bool(forKey: SettingsKey.showOriginal),
             fontScale: d.double(forKey: SettingsKey.fontScale),

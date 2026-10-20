@@ -16,6 +16,7 @@ Manga Browser là app đọc và dịch truyện tranh. Chúng tôi không có m
 Bộ dịch bên thứ ba và chính sách của họ:
 - Google Translate / Google Cloud Translation, Gemini: https://policies.google.com/privacy
 - DeepSeek: https://platform.deepseek.com/downloads/DeepSeek%20Privacy%20Policy.html
+- OpenRouter (chuyển tiếp tới model bạn chọn): https://openrouter.ai/privacy
 
 ## Chúng tôi không
 - Thu thập, lưu trên máy chủ hay bán dữ liệu của bạn.
@@ -33,4 +34,4 @@ Mở issue tại https://github.com/diepnt27/manga-trans/issues
 
 # Privacy Policy — Manga Browser (English)
 
-Manga Browser recognizes English text in comic pages **on the device**. Only that recognized text is sent to the translation provider the user selects (Google, Gemini or DeepSeek), and only after the user consents. Images are never uploaded. API keys are stored in the device Keychain. We run no servers, do not collect, store or sell personal data, and use no tracking, ads or analytics. Users can revoke consent and clear browsing data in Settings → Privacy. Contact: https://github.com/diepnt27/manga-trans/issues
+Manga Browser recognizes English text in comic pages **on the device**. Only that recognized text is sent to the translation provider the user selects (Google, Gemini, DeepSeek or OpenRouter), and only after the user consents. Images are never uploaded. API keys are stored in the device Keychain. We run no servers, do not collect, store or sell personal data, and use no tracking, ads or analytics. Users can revoke consent and clear browsing data in Settings → Privacy. Contact: https://github.com/diepnt27/manga-trans/issues

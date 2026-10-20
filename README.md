@@ -22,7 +22,7 @@ App iOS dịch chữ trên màn hình (Anh → Việt) và hiện bản dịch t
 |---|---|
 | `BroadcastExt/` | Extension quay màn hình + OCR |
 | `MangaTrans/Pipeline/` | Lọc, gom bóng thoại, điều phối dịch |
-| `MangaTrans/Translation/` | Bộ dịch Google miễn phí, Gemini, DeepSeek |
+| `MangaTrans/Translation/` | Bộ dịch Google miễn phí, Google Cloud, Gemini, DeepSeek, OpenRouter |
 | `MangaTrans/PiP/` | Cửa sổ nổi Picture-in-Picture |
 | `MangaTrans/Browser/` | Chế độ Trình duyệt (dịch trong app, không cần quay màn hình) |
 | `MangaTrans/Views/` | Giao diện SwiftUI |
@@ -125,6 +125,7 @@ Tab **Trình duyệt** là một trình duyệt web bên trong app, mở đượ
 | Google Cloud | [console.cloud.google.com](https://console.cloud.google.com/apis/library/translate.googleapis.com) | API chính thức (Basic v2), miễn phí 500.000 ký tự/tháng, cần gắn thẻ thanh toán |
 | Gemini | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Mặc định `gemini-3.6-flash`; đổi model được trong Cài đặt |
 | DeepSeek | [platform.deepseek.com](https://platform.deepseek.com) | Mặc định `deepseek-v4-flash` |
+| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) | Một key dùng nhiều model (DeepSeek, Gemini, GPT, Claude…). Mặc định `deepseek/deepseek-v4-flash` |
 
 Bộ dịch AI nhận cả ngữ cảnh 8 câu trước để giữ cách xưng hô (ta/ngươi, anh/em…) nhất quán. API key được lưu trong UserDefaults của App Group trên máy.
 

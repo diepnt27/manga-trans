@@ -10,6 +10,8 @@ struct SettingsView: View {
     @State private var geminiKey = SecretStore.value(for: SettingsKey.geminiKey)
     @State private var deepseekKey = SecretStore.value(for: SettingsKey.deepseekKey)
     @State private var googleCloudKey = SecretStore.value(for: SettingsKey.googleCloudKey)
+    @State private var openRouterKey = SecretStore.value(for: SettingsKey.openRouterKey)
+    @AppStorage(SettingsKey.openRouterModel, store: AppGroup.defaults) private var openRouterModel = AppSettings.defaultOpenRouterModel
     @AppStorage(SettingsKey.translationConsent, store: AppGroup.defaults) private var translationConsent = false
     @State private var showClearConfirm = false
     @State private var clearedBrowsingData = false
@@ -101,6 +103,20 @@ struct SettingsView: View {
                     Text("DeepSeek")
                 } footer: {
                     Text("Lấy key tại platform.deepseek.com. Mặc định: \(AppSettings.defaultDeepSeekModel).")
+                }
+
+                Section {
+                    SecureField("API key", text: $openRouterKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: openRouterKey) { SecretStore.set($0, for: SettingsKey.openRouterKey) }
+                    TextField("Model", text: $openRouterModel)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("OpenRouter")
+                } footer: {
+                    Text("Lấy key tại openrouter.ai/keys. Một key dùng được nhiều model: DeepSeek, Gemini, GPT, Claude… — xem tên model tại openrouter.ai/models (dạng hãng/tên-model). Mặc định: \(AppSettings.defaultOpenRouterModel).")
                 }
 
                 Section {

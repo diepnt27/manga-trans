@@ -55,7 +55,7 @@ struct ConsentView: View {
             Text("Dịch bằng dịch vụ bên ngoài")
                 .font(.title2.bold())
             VStack(alignment: .leading, spacing: 10) {
-                Text("Để dịch, app nhận dạng chữ tiếng Anh trên trang truyện ngay trên máy, rồi gửi **chỉ phần chữ đó** tới bộ dịch bạn chọn (Google, Gemini hoặc DeepSeek). Hình ảnh không được gửi đi.")
+                Text("Để dịch, app nhận dạng chữ tiếng Anh trên trang truyện ngay trên máy, rồi gửi **chỉ phần chữ đó** tới bộ dịch bạn chọn (Google, Gemini, DeepSeek hoặc OpenRouter). Hình ảnh không được gửi đi.")
                 Text("App không thu thập, không lưu trữ trên máy chủ và không bán dữ liệu của bạn. Bạn có thể đổi lựa chọn bất cứ lúc nào trong Cài đặt → Quyền riêng tư.")
             }
             .foregroundStyle(.secondary)

@@ -38,6 +38,8 @@ enum TranslatorFactory {
             return GeminiTranslator(apiKey: settings.geminiKey, model: settings.geminiModel, fastMode: settings.geminiFastMode)
         case .deepseek:
             return DeepSeekTranslator(apiKey: settings.deepseekKey, model: settings.deepseekModel)
+        case .openRouter:
+            return OpenRouterTranslator(apiKey: settings.openRouterKey, model: settings.openRouterModel)
         }
     }
 }

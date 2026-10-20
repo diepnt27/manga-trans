@@ -110,30 +110,33 @@ struct GeminiTranslator: Translator {
     }
 }
 
-/// DeepSeek dùng API tương thích OpenAI.
-struct DeepSeekTranslator: Translator {
-    let apiKey: String
-    let model: String
-
-    func translate(_ texts: [String], context: [TranslationPair]) async throws -> [String] {
-        guard !apiKey.isEmpty else { throw TranslatorError.missingAPIKey("DeepSeek") }
-        guard !texts.isEmpty else { return [] }
-        let body: [String: Any] = [
-            "model": model,
-            "messages": [
-                ["role": "system", "content": MangaPrompt.system],
-                ["role": "user", "content": MangaPrompt.userMessage(texts, context: context)],
-            ],
-            "response_format": ["type": "json_object"],
-            "temperature": 1.3,
-            "stream": false,
-        ]
-        let data = try await HTTP.postJSON(
-            URL(string: "https://api.deepseek.com/chat/completions")!,
-            body: body,
-            headers: ["Authorization": "Bearer \(apiKey)"]
-        )
-        return try MangaPrompt.parse(try Self.extractText(data), expected: texts.count)
+/// Gọi API chat kiểu OpenAI (DeepSeek, OpenRouter) với prompt dịch truyện.
+enum ChatCompletion {
+    static func translate(_ texts: [String], context: [TranslationPair], url: URL, apiKey: String, model: String,
+                          temperature: Double, extraHeaders: [String: String] = [:]) async throws -> [String] {
+        var headers = extraHeaders
+        headers["Authorization"] = "Bearer \(apiKey)"
+        func body(jsonMode: Bool) -> [String: Any] {
+            var body: [String: Any] = [
+                "model": model,
+                "messages": [
+                    ["role": "system", "content": MangaPrompt.system],
+                    ["role": "user", "content": MangaPrompt.userMessage(texts, context: context)],
+                ],
+                "temperature": temperature,
+                "stream": false,
+            ]
+            if jsonMode { body["response_format"] = ["type": "json_object"] }
+            return body
+        }
+        let data: Data
+        do {
+            data = try await HTTP.postJSON(url, body: body(jsonMode: true), headers: headers)
+        } catch TranslatorError.http(let code, _) where code == 400 {
+            // Một số model không hỗ trợ chế độ JSON → thử lại không có nó (prompt vẫn yêu cầu trả JSON).
+            data = try await HTTP.postJSON(url, body: body(jsonMode: false), headers: headers)
+        }
+        return try MangaPrompt.parse(try extractText(data), expected: texts.count)
     }
 
     static func extractText(_ data: Data) throws -> String {
@@ -149,5 +152,41 @@ struct DeepSeekTranslator: Translator {
             throw TranslatorError.invalidResponse
         }
         return text
+    }
+}
+
+/// DeepSeek dùng API tương thích OpenAI.
+struct DeepSeekTranslator: Translator {
+    let apiKey: String
+    let model: String
+
+    func translate(_ texts: [String], context: [TranslationPair]) async throws -> [String] {
+        guard !apiKey.isEmpty else { throw TranslatorError.missingAPIKey("DeepSeek") }
+        guard !texts.isEmpty else { return [] }
+        return try await ChatCompletion.translate(
+            texts, context: context, url: URL(string: "https://api.deepseek.com/chat/completions")!,
+            apiKey: apiKey, model: model, temperature: 1.3
+        )
+    }
+
+    static func extractText(_ data: Data) throws -> String {
+        try ChatCompletion.extractText(data)
+    }
+}
+
+/// OpenRouter: một key dùng được nhiều model (DeepSeek, Gemini, GPT, Claude, Llama...), API kiểu OpenAI.
+struct OpenRouterTranslator: Translator {
+    let apiKey: String
+    let model: String
+
+    func translate(_ texts: [String], context: [TranslationPair]) async throws -> [String] {
+        guard !apiKey.isEmpty else { throw TranslatorError.missingAPIKey("OpenRouter") }
+        guard !texts.isEmpty else { return [] }
+        return try await ChatCompletion.translate(
+            texts, context: context, url: URL(string: "https://openrouter.ai/api/v1/chat/completions")!,
+            apiKey: apiKey, model: model, temperature: 0.7,
+            // Thông tin app hiển thị trên trang thống kê của OpenRouter.
+            extraHeaders: ["HTTP-Referer": "https://github.com/diepnt27/manga-trans", "X-Title": "Manga Browser"]
+        )
     }
 }

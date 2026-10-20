@@ -136,6 +136,11 @@ final class TranslatorParsingTests: XCTestCase {
         XCTAssertEqual(try DeepSeekTranslator.extractText(Data(json.utf8)), #"{"translations":["Chào"]}"#)
     }
 
+    func testOpenRouterResponseUsesChatFormat() throws {
+        let json = #"{"id":"gen-1","model":"deepseek/deepseek-v4-flash","choices":[{"index":0,"message":{"role":"assistant","content":"{\"translations\":[\"Chào\"]}"}}]}"#
+        XCTAssertEqual(try MangaPrompt.parse(try ChatCompletion.extractText(Data(json.utf8)), expected: 1), ["Chào"])
+    }
+
     func testUserMessageIsValidJSON() throws {
         let message = MangaPrompt.userMessage(["Hi"], context: [TranslationPair(source: "Yo", target: "Chào")])
         let object = try JSONSerialization.jsonObject(with: Data(message.utf8)) as? [String: Any]
