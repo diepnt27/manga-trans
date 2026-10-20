@@ -112,11 +112,14 @@ struct GeminiTranslator: Translator {
 
 /// Gọi API chat kiểu OpenAI (DeepSeek, OpenRouter) với prompt dịch truyện.
 enum ChatCompletion {
+    /// `jsonMode`: yêu cầu trả về JSON (không phải nhà cung cấp nào cũng hỗ trợ).
+    /// `extraBody`: tham số riêng của từng dịch vụ; bị từ chối (HTTP 400) thì gửi lại không có chúng.
     static func translate(_ texts: [String], context: [TranslationPair], url: URL, apiKey: String, model: String,
-                          temperature: Double, extraHeaders: [String: String] = [:]) async throws -> [String] {
+                          temperature: Double, jsonMode: Bool = true, extraBody: [String: Any] = [:],
+                          extraHeaders: [String: String] = [:]) async throws -> [String] {
         var headers = extraHeaders
         headers["Authorization"] = "Bearer \(apiKey)"
-        func body(jsonMode: Bool) -> [String: Any] {
+        func body(full: Bool) -> [String: Any] {
             var body: [String: Any] = [
                 "model": model,
                 "messages": [
@@ -126,15 +129,18 @@ enum ChatCompletion {
                 "temperature": temperature,
                 "stream": false,
             ]
-            if jsonMode { body["response_format"] = ["type": "json_object"] }
+            if full {
+                if jsonMode { body["response_format"] = ["type": "json_object"] }
+                extraBody.forEach { body[$0.key] = $0.value }
+            }
             return body
         }
         let data: Data
         do {
-            data = try await HTTP.postJSON(url, body: body(jsonMode: true), headers: headers)
-        } catch TranslatorError.http(let code, _) where code == 400 {
-            // Một số model không hỗ trợ chế độ JSON → thử lại không có nó (prompt vẫn yêu cầu trả JSON).
-            data = try await HTTP.postJSON(url, body: body(jsonMode: false), headers: headers)
+            data = try await HTTP.postJSON(url, body: body(full: true), headers: headers)
+        } catch TranslatorError.http(let code, _) where code == 400 && (jsonMode || !extraBody.isEmpty) {
+            // Model không hỗ trợ chế độ JSON / tham số thêm → thử lại bản tối giản (prompt vẫn yêu cầu trả JSON).
+            data = try await HTTP.postJSON(url, body: body(full: false), headers: headers)
         }
         return try MangaPrompt.parse(try extractText(data), expected: texts.count)
     }
@@ -185,6 +191,14 @@ struct OpenRouterTranslator: Translator {
         return try await ChatCompletion.translate(
             texts, context: context, url: URL(string: "https://openrouter.ai/api/v1/chat/completions")!,
             apiKey: apiKey, model: model, temperature: 0.7,
+            // Nhiều nhà cung cấp trên OpenRouter không hỗ trợ chế độ JSON → bỏ để khỏi phải gửi lại lần 2.
+            jsonMode: false,
+            extraBody: [
+                // Tắt "suy nghĩ" (reasoning): câu thoại ngắn không cần, chỉ làm chậm vài giây.
+                "reasoning": ["enabled": false],
+                // Ưu tiên nhà cung cấp phản hồi nhanh nhất cho model đã chọn.
+                "provider": ["sort": "latency"],
+            ],
             // Thông tin app hiển thị trên trang thống kê của OpenRouter.
             extraHeaders: ["HTTP-Referer": "https://github.com/diepnt27/manga-trans", "X-Title": "Manga Browser"]
         )

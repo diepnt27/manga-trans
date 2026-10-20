@@ -85,8 +85,10 @@ final class TranslationCoordinator: ObservableObject {
         }
         do {
             let input = TextNormalizer.translationInput(Self.sampleText)
+            let started = Date()
             let result = try await TranslatorFactory.make(settings).translate([input], context: [])
-            return result.first ?? ""
+            let seconds = Date().timeIntervalSince(started)
+            return (result.first ?? "") + String(format: "  (%.1f giây)", seconds)
         } catch {
             return "Lỗi: \(error.localizedDescription)"
         }
