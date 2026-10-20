@@ -45,13 +45,19 @@ enum TranslatorFactory {
 }
 
 enum HTTP {
-    static func postJSON(_ url: URL, body: [String: Any], headers: [String: String] = [:]) async throws -> Data {
-        var request = URLRequest(url: url, timeoutInterval: 30)
+    static func postJSON(_ url: URL, body: [String: Any], headers: [String: String] = [:],
+                         timeout: TimeInterval = 30) async throws -> Data {
+        var request = URLRequest(url: url, timeoutInterval: timeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await send(request)
+    }
+
+    /// Lô lớn (cả chương) cần nhiều thời gian sinh câu trả lời hơn.
+    static func timeout(forItems count: Int) -> TimeInterval {
+        min(120, 30 + Double(count))
     }
 
     static func send(_ request: URLRequest) async throws -> Data {

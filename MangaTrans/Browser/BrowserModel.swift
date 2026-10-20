@@ -50,13 +50,18 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     @Published private(set) var overlays: [Overlay] = []
     @Published private(set) var status = idleStatus
     @Published private(set) var bookmarks: [Bookmark] = []
+    /// Dịch trước cả chương: số bóng thoại đã có bản dịch sẵn, và đang chuẩn bị hay không.
+    @Published private(set) var chapterReady = 0
+    @Published private(set) var isPreparingChapter = false
     @Published var isTranslationEnabled = true {
         didSet {
             if isTranslationEnabled {
                 lastKeys = []
                 scheduleScan(after: 0.1)
+                refreshChapter(force: true)
             } else {
                 translateTask?.cancel()
+                chapter.reset()
                 overlays = []
                 status = "Đã tắt dịch"
             }
@@ -64,6 +69,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     }
 
     private let translation: TranslationService
+    private let chapter = ChapterPrefetcher()
+    private var chapterTimer: Timer?
     private var observations: [NSKeyValueObservation] = []
     private var scanTimer: Timer?
     private var followUpTimer: Timer?
@@ -104,6 +111,10 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         webView.uiDelegate = self
         observeWebView()
         bookmarks = loadBookmarks()
+        chapter.onProgress = { [weak self] ready, working in
+            self?.chapterReady = ready
+            self?.isPreparingChapter = working
+        }
     }
 
     // MARK: - Điều hướng
@@ -132,6 +143,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         scanTimer?.invalidate()
         followUpTimer?.invalidate()
         translateTask?.cancel()
+        chapterTimer?.invalidate()
+        chapter.reset()
         observations = []
     }
 
@@ -316,10 +329,17 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
             rescanFollowUp = rescanFollowUp || followUp
             return
         }
+        refreshChapter()
         let scanGeneration = generation
         captureBlocks(afterScreenUpdates: true) { [weak self] blocks in
             self?.process(blocks, generation: scanGeneration, followUp: followUp)
         }
+    }
+
+    /// Dịch trước cả chương (ảnh mới tải thêm khi cuộn cũng được xử lý; tự giãn cách 8 giây).
+    private func refreshChapter(force: Bool = false) {
+        guard isTranslationEnabled, hasPage else { return }
+        chapter.refresh(webView: webView, translation: translation, conversation: id.uuidString, force: force)
     }
 
     /// Quét lúc đang cuộn: chỉ dịch sẵn vào cache, không hiển thị.
@@ -416,13 +436,21 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         queue.markShown(focused)
         if !focused.isEmpty { focusedKeys = Set(focused.map(\.key)) }
 
-        let initial: [(String, PiPEntry.State)] = blocks.map { block in
+        // Kiểu khung dịch: chỉ dịch các bóng đang hiện trong khung (đỡ tốn token). Kiểu đè lên bóng thoại: dịch hết.
+        let panelOnly = UserDefaults.standard.string(forKey: BrowserDisplayMode.storageKey) != BrowserDisplayMode.overlay.rawValue
+        let targets = panelOnly ? blocks.filter { focusedKeys.contains($0.key) } : blocks
+        guard !targets.isEmpty else {
+            status = Self.idleStatus
+            return
+        }
+
+        let initial: [(String, PiPEntry.State)] = targets.map { block in
             if let cached = translation.cached(block, engine: settings.engine) { return (cached, .done) }
             return ("…", .pending)
         }
-        show(blocks, initial, generation: scanGeneration)
+        show(targets, initial, generation: scanGeneration)
         guard initial.contains(where: { $0.1 == .pending }) else {
-            status = "Đã dịch \(blocks.count) bóng thoại"
+            status = "Đã dịch \(targets.count) bóng thoại"
             return
         }
 
@@ -431,16 +459,16 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         translateTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let results = try await self.translation.translate(blocks, settings: settings, conversation: self.id.uuidString)
+                let results = try await self.translation.translate(targets, settings: settings, conversation: self.id.uuidString)
                 guard !Task.isCancelled else { return }
-                self.status = "Đã dịch \(blocks.count) bóng thoại"
-                self.show(blocks, results.map { ($0, .done) }, generation: scanGeneration)
+                self.status = "Đã dịch \(targets.count) bóng thoại"
+                self.show(targets, results.map { ($0, .done) }, generation: scanGeneration)
             } catch {
                 guard !Task.isCancelled else { return }
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 self.status = "Lỗi: \(message)"
                 self.lastKeys = []
-                self.show(blocks, initial.map { item -> (String, PiPEntry.State) in item.1 == .pending ? ("Lỗi dịch", .error) : item }, generation: scanGeneration)
+                self.show(targets, initial.map { item -> (String, PiPEntry.State) in item.1 == .pending ? ("Lỗi dịch", .error) : item }, generation: scanGeneration)
             }
         }
     }
@@ -470,6 +498,8 @@ extension BrowserModel: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         SpeechReader.shared.stop()
+        chapterTimer?.invalidate()
+        chapter.reset()
         overlays = []
         entries = []
         lastKeys = []
@@ -481,6 +511,11 @@ extension BrowserModel: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         onPageFinished?()
         scheduleScan(after: 0.6)
+        // Chờ trang dựng xong danh sách ảnh rồi mới dịch trước cả chương.
+        chapterTimer?.invalidate()
+        chapterTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.refreshChapter(force: true) }
+        }
     }
 }
 

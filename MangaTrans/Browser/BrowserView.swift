@@ -2,6 +2,8 @@ import SwiftUI
 import WebKit
 
 enum BrowserDisplayMode: String, CaseIterable, Identifiable {
+    static let storageKey = "browserDisplayMode"
+
     /// Khung dịch nổi phía trên trang.
     case panel
     /// Bản dịch đè thẳng lên bóng thoại.
@@ -31,7 +33,7 @@ struct BrowserPage: View {
     @ObservedObject var model: BrowserModel
     let tabCount: Int
     let showTabs: () -> Void
-    @AppStorage("browserDisplayMode") private var displayMode: BrowserDisplayMode = .panel
+    @AppStorage(BrowserDisplayMode.storageKey) private var displayMode: BrowserDisplayMode = .panel
     @State private var address = ""
     @State private var showBookmarks = false
     /// Toàn màn hình: ẩn thanh địa chỉ, thanh công cụ và thanh tab để dành chỗ cho truyện.
@@ -151,6 +153,8 @@ struct BrowserPage: View {
             .accessibilityLabel("Các tab (\(tabCount))")
             toolbarButton(displayMode == .panel ? "rectangle.topthird.inset.filled" : "text.bubble.fill") {
                 displayMode = displayMode == .panel ? .overlay : .panel
+                // Kiểu khung chỉ dịch bóng đang hiện, kiểu đè cần dịch hết bóng trên màn hình.
+                model.rescan()
             }
             .disabled(!model.isTranslationEnabled)
             toolbarButton(model.isTranslationEnabled ? "character.bubble.fill" : "character.bubble",
@@ -303,7 +307,17 @@ private struct TranslationPanel: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Spacer()
+            Spacer(minLength: 0)
+            // Số bóng thoại của chương đã dịch sẵn (đang chuẩn bị: tia sét rỗng).
+            if model.chapterReady > 0 || model.isPreparingChapter {
+                Label("\(model.chapterReady)", systemImage: model.isPreparingChapter ? "bolt" : "bolt.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .accessibilityLabel("Đã dịch sẵn \(model.chapterReady) bóng thoại của chương")
+            }
             // Loa: đọc to câu tiếng Anh của các bóng thoại đang hiện; bấm lần nữa để dừng.
             Button { speech.toggle(model.entries.map(\.original)) } label: {
                 Image(systemName: speech.isSpeaking ? "speaker.wave.2.fill" : "speaker.wave.2")

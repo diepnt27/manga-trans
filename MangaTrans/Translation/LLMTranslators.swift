@@ -6,7 +6,7 @@ enum MangaPrompt {
     You translate English comic / manga / manhwa / webtoon speech bubbles into Vietnamese.
 
     Input is JSON: {"context": [{"source": ..., "target": ...}], "lines": [...]}.
-    - "lines" are the bubbles currently on screen, in reading order. Translate every one of them.
+    - "lines" are the bubbles to translate, in reading order (it may be a whole chapter). Translate every one of them.
     - "context" holds earlier bubbles with their accepted translations. Use it only to stay consistent \
     (names, pronouns, tone); do not translate it again.
 
@@ -16,7 +16,7 @@ enum MangaPrompt {
     - Pick pronouns (tôi/cậu, ta/ngươi, anh/em, tao/mày, ông/cháu...) that fit the relationship and tone, \
     and keep them consistent with the context. Martial-arts / historical settings usually use ta/ngươi, huynh/đệ, tiền bối.
     - Keep personal names as they are. Translate sound effects briefly.
-    - Return ONLY a JSON object: {"translations": ["...", ...]} with exactly one item per line, in the same order.
+    - Return ONLY a JSON object: {"translations": ["...", ...]} with exactly one item per line, in the same order. Never merge, split or skip lines.
     """
 
     static func userMessage(_ texts: [String], context: [TranslationPair]) -> String {
@@ -45,6 +45,9 @@ enum MangaPrompt {
         let items = response.translations
         if items.count == expected { return items }
         if expected == 1 { return [items.joined(separator: " ")] }
+        // Lô nhiều câu mà lệch số lượng thì không biết câu nào bị gộp/bỏ — ghép sai sẽ lưu nhầm vào cache.
+        // Báo lỗi để TranslationService chia nhỏ lô và gửi lại.
+        guard expected <= 2 else { throw TranslatorError.invalidResponse }
         if items.count > expected { return Array(items.prefix(expected)) }
         return items + Array(repeating: "(?)", count: expected - items.count)
     }
@@ -82,7 +85,8 @@ struct GeminiTranslator: Translator {
             "contents": [["role": "user", "parts": [["text": MangaPrompt.userMessage(texts, context: context)]]]],
             "generationConfig": generationConfig,
         ]
-        let data = try await HTTP.postJSON(url, body: body, headers: ["x-goog-api-key": apiKey])
+        let data = try await HTTP.postJSON(url, body: body, headers: ["x-goog-api-key": apiKey],
+                                           timeout: HTTP.timeout(forItems: texts.count))
         return try MangaPrompt.parse(try Self.extractText(data), expected: texts.count)
     }
 
@@ -135,12 +139,13 @@ enum ChatCompletion {
             }
             return body
         }
+        let timeout = HTTP.timeout(forItems: texts.count)
         let data: Data
         do {
-            data = try await HTTP.postJSON(url, body: body(full: true), headers: headers)
+            data = try await HTTP.postJSON(url, body: body(full: true), headers: headers, timeout: timeout)
         } catch TranslatorError.http(let code, _) where code == 400 && (jsonMode || !extraBody.isEmpty) {
             // Model không hỗ trợ chế độ JSON / tham số thêm → thử lại bản tối giản (prompt vẫn yêu cầu trả JSON).
-            data = try await HTTP.postJSON(url, body: body(full: false), headers: headers)
+            data = try await HTTP.postJSON(url, body: body(full: false), headers: headers, timeout: timeout)
         }
         return try MangaPrompt.parse(try extractText(data), expected: texts.count)
     }

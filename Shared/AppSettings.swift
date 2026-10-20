@@ -25,6 +25,16 @@ enum TranslatorEngine: String, CaseIterable, Identifiable {
         case .openRouter: return "OpenRouter"
         }
     }
+
+    /// Số bóng thoại tối đa mỗi lần gửi khi dịch trước cả chương.
+    /// `nil`: bộ dịch dịch từng câu một (Google miễn phí) — gom lô không tiết kiệm được gì.
+    var chapterBatchSize: Int? {
+        switch self {
+        case .google: return nil
+        case .googleCloud: return 100 // API nhận tối đa 128 đoạn mỗi lần
+        case .gemini, .deepseek, .openRouter: return 60
+        }
+    }
 }
 
 enum WindowSize: String, CaseIterable, Identifiable {
@@ -113,6 +123,7 @@ enum SettingsKey {
     static let bubbleTextOnly = "bubbleTextOnly"
     static let translationConsentAsked = "translationConsentAsked"
     static let maxBubbles = "maxBubbles"
+    static let chapterPrefetch = "chapterPrefetch"
 
     // Trạng thái nội bộ (extension ghi)
     static let broadcastActive = "broadcastActive"
@@ -153,6 +164,8 @@ struct AppSettings {
     var bubbleTextOnly: Bool
     /// Số bóng thoại tối đa hiện mỗi lần.
     var maxBubbles: Int
+    /// Trình duyệt: nhận dạng ngầm mọi ảnh truyện trên trang rồi dịch cả chương trong vài lần gửi.
+    var chapterPrefetch: Bool
 
     static let defaultValues: [String: Any] = [
         SettingsKey.engine: TranslatorEngine.google.rawValue,
@@ -169,6 +182,7 @@ struct AppSettings {
         SettingsKey.readingZone: ReadingZone.middle.rawValue,
         SettingsKey.maxBubbles: 1,
         SettingsKey.bubbleTextOnly: true,
+        SettingsKey.chapterPrefetch: true,
         SettingsKey.ocrAccuracy: OCRAccuracy.accurate.rawValue,
         SettingsKey.marginTop: 0.05,
         SettingsKey.marginBottom: 0.08,
@@ -217,7 +231,8 @@ struct AppSettings {
             readingZone: ReadingZone(rawValue: string(SettingsKey.readingZone)) ?? .middle,
             translationConsent: d.bool(forKey: SettingsKey.translationConsent),
             bubbleTextOnly: d.bool(forKey: SettingsKey.bubbleTextOnly),
-            maxBubbles: min(6, max(1, d.integer(forKey: SettingsKey.maxBubbles)))
+            maxBubbles: min(6, max(1, d.integer(forKey: SettingsKey.maxBubbles))),
+            chapterPrefetch: d.bool(forKey: SettingsKey.chapterPrefetch)
         )
     }
 }

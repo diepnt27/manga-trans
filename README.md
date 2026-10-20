@@ -112,6 +112,8 @@ Tab **Trình duyệt** là một trình duyệt web bên trong app, mở đượ
 - Nút **khung / bóng thoại** trên thanh công cụ đổi cách hiện bản dịch:
   - **Khung dịch nổi**: khung ở trên trang, kéo phần đầu khung để di chuyển, bấm ⌃ để thu gọn.
   - **Đè lên bóng thoại**: chữ Việt hiện đúng chỗ chữ Anh, tự ẩn khi đang cuộn.
+- **Dịch trước cả chương** (Gemini / DeepSeek / OpenRouter / Google Cloud, bật sẵn): mở chương là app tải ngầm mọi ảnh truyện trên trang, nhận dạng chữ rồi gom bóng thoại gửi dịch **một lần** (tối đa 60 câu mỗi lần; chương dài thì vài lần). Cuộn tới đâu bản dịch hiện ngay tới đó, khung dịch vẫn như cấu hình. Gửi prompt một lần cho cả chương nên tốn ít token hơn nhiều so với dịch từng bóng, xưng hô cũng nhất quán hơn. Số ⚡︎ trên khung dịch là số câu đã dịch sẵn. Tự tạm dừng khi bật Chế độ nguồn điện thấp hoặc máy nóng; tắt ở Cài đặt → Nhận dạng chữ. Trang vẽ truyện bằng canvas / blob (không có ảnh thường) thì vẫn dịch theo vùng đang xem như cũ.
+- Kiểu **khung dịch nổi** chỉ gửi đi dịch các bóng đang hiện trong khung (không dịch cả màn hình) để đỡ tốn token.
 - **Nhiều tab** (tối đa 6) để đọc nhiều truyện cùng lúc: nút ô vuông có số trên thanh công cụ → chạm tab để chuyển, ✕ để đóng, **＋ Tab mới**. Mỗi tab nhớ trang và ngữ cảnh dịch riêng; app nhớ các tab cho lần sau.
 - Nút **☆** lưu dấu trang, nút **📖** mở danh sách dấu trang. App nhớ trang bạn xem lần cuối.
 - Nút **bong bóng chữ** bật/tắt dịch.

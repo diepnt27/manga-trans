@@ -26,6 +26,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.scanInterval, store: AppGroup.defaults) private var scanInterval = 0.6
     @AppStorage(SettingsKey.stableDelay, store: AppGroup.defaults) private var stableDelay = 0.4
     @AppStorage(SettingsKey.prefetchWhileScrolling, store: AppGroup.defaults) private var prefetchWhileScrolling = false
+    @AppStorage(SettingsKey.chapterPrefetch, store: AppGroup.defaults) private var chapterPrefetch = true
     @AppStorage(SettingsKey.marginTop, store: AppGroup.defaults) private var marginTop = 0.05
     @AppStorage(SettingsKey.marginBottom, store: AppGroup.defaults) private var marginBottom = 0.08
 
@@ -168,6 +169,7 @@ struct SettingsView: View {
                         ForEach(OCRAccuracy.allCases) { Text($0.title).tag($0) }
                     }
                     Toggle("Chỉ dịch chữ trong bóng thoại", isOn: $bubbleTextOnly)
+                    Toggle("Dịch trước cả chương", isOn: $chapterPrefetch)
                     Toggle("Dịch trước khi đang cuộn", isOn: $prefetchWhileScrolling)
                     slider("Quét mỗi", value: $scanInterval, range: 0.3...2.0, step: 0.1, format: "%.1f giây")
                     slider("Chờ đứng yên", value: $stableDelay, range: 0.2...2.0, step: 0.1, format: "%.1f giây")
@@ -176,7 +178,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Nhận dạng chữ")
                 } footer: {
-                    Text("\"Dịch trước khi đang cuộn\": bóng thoại được dịch sẵn lúc bạn cuộn chậm, dừng lại là hiện ngay (tốn thêm lượt gọi API cho đoạn chỉ lướt qua). Nếu việc quét màn hình tự tắt, hãy chọn OCR \"Nhanh\". \"Chờ đứng yên\": thời gian màn hình phải dừng cuộn trước khi dịch. Bỏ qua mép trên/dưới để không dịch thanh trạng thái và thanh công cụ trình duyệt.")
+                    Text("\"Dịch trước cả chương\" (Trình duyệt, bộ dịch AI / Google Cloud): mở chương là app đọc ngầm mọi ảnh truyện trên trang, gom bóng thoại gửi dịch 1 lần (tối đa 60 câu/lần) — tiết kiệm token, bản dịch nhất quán hơn, cuộn tới đâu hiện ngay tới đó (⚡︎ trên khung dịch là số câu đã sẵn). Tự tạm dừng khi bật Chế độ nguồn điện thấp hoặc máy nóng. \"Dịch trước khi đang cuộn\": bóng thoại được dịch sẵn lúc bạn cuộn chậm, dừng lại là hiện ngay (tốn thêm lượt gọi API cho đoạn chỉ lướt qua). Nếu việc quét màn hình tự tắt, hãy chọn OCR \"Nhanh\". \"Chờ đứng yên\": thời gian màn hình phải dừng cuộn trước khi dịch. Bỏ qua mép trên/dưới để không dịch thanh trạng thái và thanh công cụ trình duyệt.")
                 }
             }
             .navigationTitle("Cài đặt")

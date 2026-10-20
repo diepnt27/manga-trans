@@ -57,7 +57,8 @@ struct GoogleCloudTranslator: Translator {
         // Key gửi qua header (không đặt trên URL, tránh lọt vào log/proxy).
         let url = URL(string: "https://translation.googleapis.com/language/translate/v2")!
         let body: [String: Any] = ["q": texts, "source": source, "target": target, "format": "text"]
-        let data = try await HTTP.postJSON(url, body: body, headers: ["x-goog-api-key": apiKey])
+        let data = try await HTTP.postJSON(url, body: body, headers: ["x-goog-api-key": apiKey],
+                                           timeout: HTTP.timeout(forItems: texts.count))
         let results = try Self.parse(data)
         guard results.count == texts.count else { throw TranslatorError.invalidResponse }
         return results

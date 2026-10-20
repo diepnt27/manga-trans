@@ -122,6 +122,8 @@ final class TranslatorParsingTests: XCTestCase {
 
     func testLLMCountMismatchIsPadded() throws {
         XCTAssertEqual(try MangaPrompt.parse(#"{"translations": ["Một"]}"#, expected: 2), ["Một", "(?)"])
+        // Lô lớn lệch số câu: báo lỗi (để chia nhỏ gửi lại) thay vì ghép sai bản dịch.
+        XCTAssertThrowsError(try MangaPrompt.parse(#"{"translations": ["Một", "Hai"]}"#, expected: 3))
         XCTAssertEqual(try MangaPrompt.parse(#"{"translations": ["Một", "Hai"]}"#, expected: 1), ["Một Hai"])
         XCTAssertEqual(try MangaPrompt.parse("Xin chào", expected: 1), ["Xin chào"])
     }
@@ -246,6 +248,12 @@ final class TextRecognizerTests: XCTestCase {
 private final class CountingTranslator: Translator {
     private let lock = NSLock()
     private var log: [[String]] = []
+    /// Lô lớn hơn mức này: giả lập mô hình trả lệch số câu.
+    var maxReliableBatch = Int.max
+
+    init(maxReliableBatch: Int = .max) {
+        self.maxReliableBatch = maxReliableBatch
+    }
     var requests: [[String]] {
         lock.lock(); defer { lock.unlock() }
         return log
@@ -256,6 +264,7 @@ private final class CountingTranslator: Translator {
         log.append(texts)
         lock.unlock()
         try await Task.sleep(nanoseconds: 50_000_000)
+        if texts.count > maxReliableBatch { throw TranslatorError.invalidResponse }
         return texts.map { "VI:" + $0 }
     }
 }
@@ -287,6 +296,73 @@ final class TranslationServiceTests: XCTestCase {
         // Lần sau lấy từ cache, không gọi bộ dịch nữa.
         _ = try await service.translate([b, a], settings: settings)
         XCTAssertEqual(fake.requests.count, 2)
+    }
+
+    private func aiSettings() -> AppSettings {
+        let defaults = UserDefaults(suiteName: "tests-chapter")!
+        defaults.set(true, forKey: SettingsKey.translationConsent)
+        defaults.set(TranslatorEngine.gemini.rawValue, forKey: SettingsKey.engine)
+        return AppSettings.load(defaults)
+    }
+
+    func testWholeChapterIsTranslatedInOneRequest() async throws {
+        let fake = CountingTranslator()
+        let service = TranslationService(makeTranslator: { _ in fake })
+        let settings = aiSettings()
+        let chapter = (1...40).map { block("LINE NUMBER \($0) OF THIS CHAPTER") }
+
+        let count = try await service.translateChapter(chapter, settings: settings, conversation: "tab")
+        XCTAssertEqual(count, 40)
+        XCTAssertEqual(fake.requests.count, 1)
+
+        // Cuộn tới: OCR trên màn hình đọc hơi khác (sai 1 từ) vẫn lấy bản dịch có sẵn, không gọi API.
+        let onScreen = block("LINE NUMBER 7 OF THIS CHAPTEB")
+        XCTAssertEqual(service.cached(onScreen, engine: settings.engine), "VI:Line number 7 of this chapter")
+        _ = try await service.translate([onScreen], settings: settings, conversation: "tab")
+        XCTAssertEqual(fake.requests.count, 1)
+
+        // Đã dịch rồi thì gọi lại cũng không gửi nữa.
+        XCTAssertEqual(try await service.translateChapter(chapter, settings: settings, conversation: "tab"), 0)
+        XCTAssertEqual(fake.requests.count, 1)
+    }
+
+    func testBatchIsSplitWhenTranslatorLosesCount() async throws {
+        let fake = CountingTranslator(maxReliableBatch: 4)
+        let service = TranslationService(makeTranslator: { _ in fake })
+        let chapter = (1...10).map { block("BUBBLE \($0) SAYS SOMETHING") }
+        try await service.translateChapter(chapter, settings: aiSettings(), conversation: "split")
+        for item in chapter {
+            XCTAssertEqual(service.cached(item, engine: .gemini), "VI:" + item.translationInput)
+        }
+    }
+
+    func testShortBubblesNeedExactMatch() {
+        let words: (String) -> Set<String> = { Set($0.split(separator: " ").map(String.init)) }
+        XCTAssertFalse(TranslationService.isSameText(words("no way"), words("no way out")))
+        XCTAssertFalse(TranslationService.isSameText(words("what are you doing"), words("what are they planning tonight")))
+        XCTAssertTrue(TranslationService.isSameText(words("where did you go"), words("where did you go yesterday")))
+    }
+}
+
+final class ChapterTilingTests: XCTestCase {
+    func testShortImageIsOneTile() {
+        XCTAssertEqual(RecognitionJob.tiles(height: 1500, tileHeight: 1400),
+                       [RecognitionJob.Tile(start: 0, end: 1500, ownStart: 0, ownEnd: 1500)])
+    }
+
+    func testLongStripTilesOverlapAndOwnEveryRowOnce() {
+        let tiles = RecognitionJob.tiles(height: 10_000, tileHeight: 1400)
+        XCTAssertGreaterThan(tiles.count, 7)
+        XCTAssertEqual(tiles.first?.ownStart, 0)
+        XCTAssertEqual(tiles.last?.ownEnd, 10_000)
+        XCTAssertEqual(tiles.last?.end, 10_000)
+        for (a, b) in zip(tiles, tiles.dropFirst()) {
+            // Liền nhau, không hở, không trùng; ranh giới nằm trong phần chồng nhau.
+            XCTAssertEqual(a.ownEnd, b.ownStart)
+            XCTAssertGreaterThan(a.end - b.start, 300)
+            XCTAssertGreaterThan(a.ownEnd, b.start)
+            XCTAssertLessThan(a.ownEnd, a.end)
+        }
     }
 }
 
