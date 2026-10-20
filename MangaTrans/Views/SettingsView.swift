@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 struct SettingsView: View {
     @EnvironmentObject private var coordinator: TranslationCoordinator
@@ -31,6 +32,10 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.marginBottom, store: AppGroup.defaults) private var marginBottom = 0.08
 
     @AppStorage(BrowserModel.autoHideChromeKey) private var autoHideChrome = true
+    @AppStorage(SpeechSettingsKey.engine) private var speechEngine: SpeechEngine = .defaultEngine
+    @AppStorage(SpeechSettingsKey.voice) private var speechVoice = ""
+    @AppStorage(SpeechSettingsKey.rate) private var speechRate = 1.0
+    @State private var voices: [AVSpeechSynthesisVoice] = []
     @State private var testResult: String?
     @State private var isTesting = false
 
@@ -163,6 +168,29 @@ struct SettingsView: View {
                 } footer: {
                     Text("Cuộn xuống để đọc: thanh công cụ và thanh tab ẩn đi. Cuộn ngược lên một chút hoặc về đầu trang để hiện lại.")
                 }
+
+                Section {
+                    Picker("Giọng đọc", selection: $speechEngine) {
+                        ForEach(SpeechEngine.available) { Text($0.title).tag($0) }
+                    }
+                    if speechEngine == .system {
+                        Picker("Giọng", selection: $speechVoice) {
+                            Text("Tự chọn (tốt nhất)").tag("")
+                            ForEach(voices, id: \.identifier) { voice in
+                                Text("\(voice.name) · \(SpeechReader.qualityLabel(voice)) · \(voice.language)").tag(voice.identifier)
+                            }
+                        }
+                    }
+                    slider("Tốc độ", value: $speechRate, range: 0.6...1.5, step: 0.05, format: "×%.2f")
+                    Button("Nghe thử") {
+                        SpeechReader.shared.speak(["HEY! WHAT ARE YOU DOING HERE? WE HAVE TO GO, RIGHT NOW!"])
+                    }
+                } header: {
+                    Text("Nút loa (đọc tiếng Anh)")
+                } footer: {
+                    Text("Google Dịch: giọng tự nhiên như nút loa trên Google Dịch, cần mạng (câu tiếng Anh được gửi tới Google); mất mạng thì tự dùng giọng iPhone. Giọng iPhone hay nhất là loại Cao cấp: vào Cài đặt iPhone → Trợ năng → Nội dung được đọc → Giọng nói → Tiếng Anh, tải ví dụ Ava, Zoe hoặc Evan (Cao cấp), rồi quay lại đây chọn.")
+                }
+                .onAppear { voices = SpeechReader.englishVoices() }
 
                 Section {
                     Picker("Độ chính xác OCR", selection: $ocrAccuracy) {

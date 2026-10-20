@@ -559,3 +559,20 @@ final class BubbleQueueFuzzyTests: XCTestCase {
         XCTAssertTrue(BubbleQueue.isSameBubble(["both", "of", "you", "have"], ["hahaha", "both", "of", "you", "have"]))
     }
 }
+
+final class SpeechTests: XCTestCase {
+    func testGoogleSpeechChunksStayUnderLimit() {
+        let long = Array(repeating: "This is a fairly long sentence for the speech engine.", count: 10).joined(separator: " ")
+        let chunks = GoogleSpeech.chunk(long)
+        XCTAssertGreaterThan(chunks.count, 1)
+        XCTAssertTrue(chunks.allSatisfy { $0.count <= GoogleSpeech.maxChunkLength })
+        XCTAssertEqual(chunks.joined(separator: " "), long)
+        XCTAssertEqual(GoogleSpeech.chunk("Hey! Wait."), ["Hey! Wait."])
+    }
+
+    func testOnlyMP3IsAcceptedFromGoogle() {
+        XCTAssertTrue(GoogleSpeech.isMP3(Data("ID3".utf8) + Data(count: 400)))
+        XCTAssertTrue(GoogleSpeech.isMP3(Data([0xFF, 0xF3, 0x44]) + Data(count: 400)))
+        XCTAssertFalse(GoogleSpeech.isMP3(Data(("<html>" + String(repeating: " ", count: 400)).utf8)))
+    }
+}

@@ -1,6 +1,6 @@
 # Chính sách quyền riêng tư — Manga Browser
 
-_Cập nhật: 19/10/2026_
+_Cập nhật: 20/10/2026_
 
 Manga Browser là app đọc và dịch truyện tranh. Chúng tôi không có máy chủ riêng và không thu thập dữ liệu cá nhân của bạn.
 
@@ -9,6 +9,7 @@ Manga Browser là app đọc và dịch truyện tranh. Chúng tôi không có m
 |---|---|---|
 | Hình ảnh trang truyện đang xem | Nhận dạng chữ **ngay trên máy** (Apple Vision) | **Không gửi đi** |
 | Chữ tiếng Anh nhận dạng được trong bóng thoại | Trên máy | Gửi tới **bộ dịch bạn chọn** để dịch, chỉ sau khi bạn đồng ý |
+| Câu tiếng Anh khi bấm nút loa | Giọng iPhone: đọc **trên máy**. Giọng Google Dịch: | Gửi tới Google để tạo giọng đọc (chỉ khi bạn chọn giọng này) |
 | API key bạn nhập | Lưu trong **Keychain** của máy | Chỉ gửi tới đúng nhà cung cấp của key đó |
 | Dấu trang, trang đọc dở, cài đặt | Lưu trên máy | Không gửi đi |
 | Cookie, dữ liệu đăng nhập trang web | Trình duyệt trong app, trên máy | Chỉ tới chính trang web đó |
