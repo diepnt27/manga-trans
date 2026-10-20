@@ -322,7 +322,8 @@ final class TranslationServiceTests: XCTestCase {
         XCTAssertEqual(fake.requests.count, 1)
 
         // Đã dịch rồi thì gọi lại cũng không gửi nữa.
-        XCTAssertEqual(try await service.translateChapter(chapter, settings: settings, conversation: "tab"), 0)
+        let again = try await service.translateChapter(chapter, settings: settings, conversation: "tab")
+        XCTAssertEqual(again, 0)
         XCTAssertEqual(fake.requests.count, 1)
     }
 
