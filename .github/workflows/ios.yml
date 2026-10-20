@@ -2,7 +2,10 @@ name: iOS build
 
 on:
   push:
+    # Chỉ sửa tài liệu → không cần build lại.
+    paths-ignore: ['**.md', 'docs/**', 'scripts/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', 'scripts/**']
   workflow_dispatch:
 
 defaults:
@@ -18,9 +21,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  # Hai việc chạy song song: build IPA (≈2–3 phút, đăng lên Releases ngay) và chạy test (≈6–7 phút).
+  ipa:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -29,25 +33,6 @@ jobs:
 
       - name: Sinh Xcode project
         run: xcodegen generate
-
-      - name: Chạy unit test (simulator)
-        run: |
-          UDID=$(python3 - <<'PY'
-          import json, subprocess
-          devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
-          for runtime, items in sorted(devices.items(), reverse=True):
-              if "iOS" in runtime:
-                  for d in items:
-                      if d["name"].startswith("iPhone"):
-                          print(d["udid"]); raise SystemExit
-          PY
-          )
-          echo "Simulator: $UDID"
-          xcodebuild test \
-            -project MangaTrans.xcodeproj \
-            -scheme MangaTrans \
-            -destination "id=$UDID" \
-            CODE_SIGNING_ALLOWED=NO
 
       - name: Build IPA chưa ký
         run: |
@@ -111,3 +96,34 @@ jobs:
           files: |
             MangaTrans.ipa
             MangaTrans-Lite.ipa
+
+  test:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài XcodeGen
+        run: brew install xcodegen
+
+      - name: Sinh Xcode project
+        run: xcodegen generate
+
+      - name: Chạy unit test (simulator)
+        run: |
+          UDID=$(python3 - <<'PY'
+          import json, subprocess
+          devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
+          for runtime, items in sorted(devices.items(), reverse=True):
+              if "iOS" in runtime:
+                  for d in items:
+                      if d["name"].startswith("iPhone"):
+                          print(d["udid"]); raise SystemExit
+          PY
+          )
+          echo "Simulator: $UDID"
+          xcodebuild test \
+            -project MangaTrans.xcodeproj \
+            -scheme MangaTrans \
+            -destination "id=$UDID" \
+            CODE_SIGNING_ALLOWED=NO
