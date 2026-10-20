@@ -308,15 +308,27 @@ private struct TranslationPanel: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            // Số bóng thoại của chương đã dịch sẵn (đang chuẩn bị: tia sét rỗng).
-            if model.chapterReady > 0 || model.isPreparingChapter {
-                Label("\(model.chapterReady)", systemImage: model.isPreparingChapter ? "bolt" : "bolt.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .accessibilityLabel("Đã dịch sẵn \(model.chapterReady) bóng thoại của chương")
+            // Số bóng thoại của chương đã dịch sẵn (đang chuẩn bị: tia sét rỗng). Bấm để xem chi tiết.
+            let chapter = model.chapterProgress
+            if chapter.isVisible {
+                Menu {
+                    Text("Ảnh truyện: đã quét \(chapter.scanned)/\(chapter.images)")
+                    if chapter.failedImages > 0 { Text("Tải lỗi: \(chapter.failedImages) ảnh") }
+                    Text("Bóng thoại tìm thấy: \(chapter.bubbles)")
+                    Text("Đã dịch sẵn: \(chapter.ready)")
+                    if let note = chapter.note { Text(note) }
+                    if chapter.working { Text("Đang chạy…") }
+                } label: {
+                    Label("\(chapter.ready)", systemImage: chapter.working ? "bolt" : "bolt.fill")
+                        .font(.caption2)
+                        .foregroundStyle(chapter.note != nil && chapter.ready == 0 ? Color.red : Color.orange)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(minWidth: 34, minHeight: 24)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Dịch trước cả chương: đã dịch sẵn \(chapter.ready) bóng thoại")
             }
             // Loa: đọc to câu tiếng Anh của các bóng thoại đang hiện; bấm lần nữa để dừng.
             Button { speech.toggle(model.entries.map(\.original)) } label: {

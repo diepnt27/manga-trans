@@ -50,9 +50,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     @Published private(set) var overlays: [Overlay] = []
     @Published private(set) var status = idleStatus
     @Published private(set) var bookmarks: [Bookmark] = []
-    /// Dịch trước cả chương: số bóng thoại đã có bản dịch sẵn, và đang chuẩn bị hay không.
-    @Published private(set) var chapterReady = 0
-    @Published private(set) var isPreparingChapter = false
+    /// Tiến độ dịch trước cả chương.
+    @Published private(set) var chapterProgress = ChapterProgress()
     @Published var isTranslationEnabled = true {
         didSet {
             if isTranslationEnabled {
@@ -111,10 +110,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         webView.uiDelegate = self
         observeWebView()
         bookmarks = loadBookmarks()
-        chapter.onProgress = { [weak self] ready, working in
-            self?.chapterReady = ready
-            self?.isPreparingChapter = working
-        }
+        chapter.onProgress = { [weak self] in self?.chapterProgress = $0 }
     }
 
     // MARK: - Điều hướng

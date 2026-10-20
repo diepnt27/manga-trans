@@ -5,31 +5,49 @@ import WebKit
 /// Dịch trước cả chương: lấy các ảnh truyện trên trang, nhận dạng chữ ngầm rồi gom bóng thoại
 /// gửi dịch theo lô lớn (cả chương chỉ 1–vài lần gửi). Bản dịch vào cache — cuộn tới đâu hiện ngay tới đó,
 /// khung dịch vẫn hiện như cấu hình.
+/// Tiến độ dịch trước cả chương — hiện khi bấm ⚡︎ trên khung dịch.
+struct ChapterProgress: Equatable {
+    /// Ảnh truyện tìm thấy trên trang / đã nhận dạng / tải lỗi.
+    var images = 0
+    var scanned = 0
+    var failedImages = 0
+    /// Bóng thoại tìm thấy / đã dịch sẵn.
+    var bubbles = 0
+    var ready = 0
+    var working = false
+    /// Lý do dừng hoặc lỗi gần nhất.
+    var note: String?
+
+    var isVisible: Bool { working || images > 0 || note != nil }
+}
+
 @MainActor
 final class ChapterPrefetcher {
-    /// Số bóng thoại đã dịch sẵn của trang hiện tại; `working`: đang nhận dạng / dịch.
-    var onProgress: ((_ ready: Int, _ working: Bool) -> Void)?
+    var onProgress: ((ChapterProgress) -> Void)?
 
     private var task: Task<Void, Never>?
     /// Ảnh đã nhận dạng của trang hiện tại (theo URL).
     private var processed: Set<String> = []
-    private var ready = 0
+    private var progress = ChapterProgress() {
+        didSet { if progress != oldValue { onProgress?(progress) } }
+    }
     private var lastRefresh = Date.distantPast
     private var needsRerun = false
     /// Lô dịch lỗi (key sai, hết hạn mức...) → dừng nhận dạng tiếp cho đỡ tốn pin.
     private var stopped = false
     /// Sau lỗi dịch, tạm nghỉ một lúc thay vì gửi lại mỗi lần dừng cuộn.
     private var pausedUntil = Date.distantPast
+    /// Lô đầu nhỏ để có bản dịch sớm; các lô sau gom lớn cho đỡ tốn token.
+    private static let firstBatchSize = 12
 
     /// Chuyển trang: huỷ việc đang làm (lô chưa gửi không tốn token nữa).
     func reset() {
         task?.cancel()
         task = nil
         processed = []
-        ready = 0
         needsRerun = false
         lastRefresh = .distantPast
-        onProgress?(0, false)
+        progress = ChapterProgress()
     }
 
     /// Gọi khi trang tải xong và mỗi lần dừng cuộn: trang tải ảnh dần (lazy load) hoặc nối chương sau
@@ -41,7 +59,10 @@ final class ChapterPrefetcher {
               webView.bounds.width > 0 else { return }
         // Tiết kiệm pin / máy đang nóng: chỉ dịch phần đang xem.
         let thermal = ProcessInfo.processInfo.thermalState
-        guard !ProcessInfo.processInfo.isLowPowerModeEnabled, thermal != .serious, thermal != .critical else { return }
+        if ProcessInfo.processInfo.isLowPowerModeEnabled || thermal == .serious || thermal == .critical {
+            progress.note = "Tạm dừng: đang bật nguồn điện thấp hoặc máy nóng"
+            return
+        }
         if task != nil {
             needsRerun = true
             return
@@ -51,7 +72,7 @@ final class ChapterPrefetcher {
             await self?.run(webView: webView, translation: translation, conversation: conversation, settings: settings)
             guard let self, !Task.isCancelled else { return }
             self.task = nil
-            self.onProgress?(self.ready, false)
+            self.progress.working = false
             if self.needsRerun {
                 self.needsRerun = false
                 self.refresh(webView: webView, translation: translation, conversation: conversation, force: true)
@@ -61,12 +82,20 @@ final class ChapterPrefetcher {
 
     private func run(webView: WKWebView, translation: TranslationService, conversation: String,
                      settings: AppSettings) async {
-        guard let page = await Self.collectImages(in: webView) else { return }
+        guard let page = await Self.collectImages(in: webView) else {
+            progress.note = "Không đọc được danh sách ảnh của trang"
+            return
+        }
         let fresh = page.images.filter { !processed.contains($0) }
         // Ít ảnh lớn → không giống trang đọc truyện (trang tìm kiếm, trang tin...) → bỏ qua.
-        guard !fresh.isEmpty, page.images.count >= 3,
-              let batchSize = settings.engine.chapterBatchSize else { return }
-        onProgress?(ready, true)
+        guard page.images.count >= 3 else {
+            progress.note = "Không thấy ảnh truyện trên trang (\(page.images.count) ảnh lớn)"
+            return
+        }
+        progress.images = max(progress.images, page.images.count)
+        guard !fresh.isEmpty, let batchSize = settings.engine.chapterBatchSize else { return }
+        progress.working = true
+        progress.note = nil
 
         let session = Self.makeSession(cookies: await Self.cookies(of: webView), userAgent: page.userAgent)
         defer { session.finishTasksAndInvalidate() }
@@ -93,29 +122,51 @@ final class ChapterPrefetcher {
                         let count = try await translation.translateChapter(batch, settings: settings,
                                                                            conversation: conversation)
                         guard !Task.isCancelled else { continue }
-                        self.ready += count
-                        self.onProgress?(self.ready, true)
+                        self.progress.ready += count
                     } catch {
+                        guard !Task.isCancelled else { continue }
                         // Lỗi key / mạng / hết hạn mức: dừng, phần đang xem vẫn dịch như thường.
                         self.stopped = true
-                        if !Task.isCancelled { self.pausedUntil = Date().addingTimeInterval(60) }
+                        self.pausedUntil = Date().addingTimeInterval(60)
+                        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                        self.progress.note = "Lỗi dịch: \(message)"
                     }
                 }
             }
-            // Nhận dạng: từng ảnh theo thứ tự đọc, đủ một lô thì gửi dịch, vẫn nhận dạng tiếp trong lúc chờ.
+            // Nhận dạng: từng ảnh theo thứ tự đọc; tải sẵn ảnh kế tiếp trong lúc nhận dạng ảnh hiện tại.
+            // Đủ một lô thì gửi dịch, vẫn nhận dạng tiếp trong lúc chờ.
             group.addTask { @MainActor in
                 var pending: [TextBlock] = []
-                for url in fresh {
-                    if Task.isCancelled || self.stopped { break }
-                    let blocks = await Task.detached(priority: .utility) { await job.recognize(url) }.value
+                var sentBatch = false
+                func startDownload(_ index: Int) -> Task<RecognitionJob.Download, Never>? {
+                    guard index < fresh.count else { return nil }
+                    let url = fresh[index]
+                    return Task.detached(priority: .medium) { await job.download(url) }
+                }
+                var next = startDownload(0)
+                for (index, url) in fresh.enumerated() {
+                    guard let current = next, !Task.isCancelled, !self.stopped else { break }
+                    next = startDownload(index + 1)
+                    let download = await current.value
                     if Task.isCancelled { break }
+                    switch download {
+                    case .failed(let reason):
+                        self.progress.failedImages += 1
+                        self.progress.note = reason
+                    case .loaded(let data):
+                        let blocks = await Task.detached(priority: .medium) { job.blocks(inImageData: data) }.value
+                        pending += blocks
+                        self.progress.bubbles += blocks.count
+                    }
                     self.processed.insert(url)
-                    pending += blocks
-                    if pending.count >= batchSize {
+                    self.progress.scanned += 1
+                    if pending.count >= (sentBatch ? batchSize : Self.firstBatchSize) {
                         batches.yield(pending)
                         pending = []
+                        sentBatch = true
                     }
                 }
+                next?.cancel()
                 if !pending.isEmpty { batches.yield(pending) }
                 batches.finish()
             }
@@ -196,14 +247,29 @@ struct RecognitionJob: Sendable {
     /// Ảnh lớn hơn mức này thường không phải trang truyện.
     private static let maxBytes = 25_000_000
 
-    func recognize(_ urlString: String) async -> [TextBlock] {
-        guard let url = URL(string: urlString) else { return [] }
+    enum Download: Sendable {
+        case loaded(Data)
+        case failed(String)
+    }
+
+    func download(_ urlString: String) async -> Download {
+        guard let url = URL(string: urlString) else { return .failed("Địa chỉ ảnh không hợp lệ") }
         var request = URLRequest(url: url)
         if let referer { request.setValue(referer, forHTTPHeaderField: "Referer") }
-        guard let loaded = try? await session.data(for: request),
-              (loaded.1 as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
-              loaded.0.count <= Self.maxBytes,
-              let image = Self.decode(loaded.0, targetWidth: targetWidth) else { return [] }
+        do {
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                return .failed("Trang chặn tải ảnh (HTTP \(http.statusCode))")
+            }
+            guard data.count <= Self.maxBytes else { return .failed("Ảnh quá lớn") }
+            return .loaded(data)
+        } catch {
+            return .failed("Không tải được ảnh: \(error.localizedDescription)")
+        }
+    }
+
+    func blocks(inImageData data: Data) -> [TextBlock] {
+        guard let image = Self.decode(data, targetWidth: targetWidth) else { return [] }
         return blocks(in: image)
     }
 
@@ -214,6 +280,9 @@ struct RecognitionJob: Sendable {
             if Task.isCancelled { break }
             let crop = CGRect(x: 0, y: tile.start, width: image.width, height: tile.end - tile.start)
             guard let piece = image.cropping(to: crop) else { continue }
+            // Phần lớn khung tranh webtoon không có chữ: quét nhanh trước, có chữ mới quét kỹ.
+            let hasText = !((try? TextRecognizer.recognize(cgImage: piece, accuracy: .fast, minimumTextHeight: 0.005)) ?? []).isEmpty
+            guard hasText else { continue }
             let lines = (try? TextRecognizer.recognize(cgImage: piece, accuracy: .accurate, minimumTextHeight: 0.005)) ?? []
             guard !lines.isEmpty else { continue }
             let background = bubbleOnly ? LuminanceImage(cgImage: piece) : nil
