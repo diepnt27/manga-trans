@@ -338,10 +338,31 @@ final class TranslationServiceTests: XCTestCase {
     }
 
     func testShortBubblesNeedExactMatch() {
-        let words: (String) -> Set<String> = { Set($0.split(separator: " ").map(String.init)) }
+        let words: (String) -> [String] = { $0.split(separator: " ").map(String.init) }
         XCTAssertFalse(TranslationService.isSameText(words("no way"), words("no way out")))
         XCTAssertFalse(TranslationService.isSameText(words("what are you doing"), words("what are they planning tonight")))
         XCTAssertTrue(TranslationService.isSameText(words("where did you go"), words("where did you go yesterday")))
+    }
+
+    func testItalicOcrMistakesStillMatch() {
+        let words: (String) -> [String] = { $0.split(separator: " ").map(String.init) }
+        // Cùng bóng thoại chữ nghiêng, 2 lần OCR sai ở các từ khác nhau.
+        let chapter = "i don t know what for someone this skilled came to the detention center but he s definitely not on my side"
+        let screen = "i don t knovv what for someone this skilleo came to the detentlon center but hes definitelv not on my sioe"
+        XCTAssertTrue(TranslationService.isSameText(words(screen), words(chapter)))
+        XCTAssertFalse(TranslationService.isSameText(words("we have to go right now"), words("we have to eat right here")))
+        XCTAssertFalse(TranslationService.isSameText(words("i m going to kill you"), words("i m going to save you")))
+    }
+
+    func testBubbleSplitInTwoDuringChapterScanStillMatches() async throws {
+        let fake = CountingTranslator()
+        let service = TranslationService(makeTranslator: { _ in fake })
+        let settings = aiSettings()
+        let halves = [block("IF I DON'T DO ANYTHING NOW"), block("I'LL BE DEAD MEAT FOR SURE")]
+        try await service.translateChapter(halves, settings: settings, conversation: "split-bubble")
+        let whole = block("IF I DON'T DO ANYTHING NOW I'LL BE DEAD MEAT FOR SURE")
+        XCTAssertEqual(service.cached(whole, engine: settings.engine),
+                       "VI:If I don't do anything now VI:I'll be dead meat for sure")
     }
 }
 
