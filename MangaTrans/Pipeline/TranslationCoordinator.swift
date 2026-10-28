@@ -137,7 +137,8 @@ final class TranslationCoordinator: ObservableObject {
         filter.marginBottom = settings.marginBottom
 
         let lines = filter.filter(frame.lines)
-        let allBlocks = TextGrouper.group(lines, imageSize: CGSize(width: frame.width, height: frame.height))
+        let allBlocks = TextGrouper.group(lines, imageSize: CGSize(width: frame.width, height: frame.height),
+                                          rightToLeft: settings.rightToLeft)
             .filter { !BubbleFilter.isNoise($0) && !filter.isEchoOfTranslation($0) }
 
         // Dịch trước: bóng thoại có ở 2 lần quét liên tiếp (kể cả khi đang cuộn) thì dịch sẵn vào cache,

@@ -105,7 +105,8 @@ final class ChapterPrefetcher {
             // Cùng độ phân giải và tỉ lệ khung với ảnh chụp màn hình lúc đọc → OCR ra cùng câu, khớp cache.
             targetWidth: max(320, Int(BrowserModel.snapshotPixelWidth(for: webView.bounds.width))),
             tileAspect: min(2.4, max(1.2, Double(webView.bounds.height / webView.bounds.width))),
-            bubbleOnly: settings.bubbleTextOnly
+            bubbleOnly: settings.bubbleTextOnly,
+            rightToLeft: settings.rightToLeft
         )
 
         var continuation: AsyncStream<[TextBlock]>.Continuation?
@@ -243,6 +244,7 @@ struct RecognitionJob: Sendable {
     let targetWidth: Int
     let tileAspect: Double
     let bubbleOnly: Bool
+    let rightToLeft: Bool
 
     /// Ảnh lớn hơn mức này thường không phải trang truyện.
     private static let maxBytes = 25_000_000
@@ -288,7 +290,7 @@ struct RecognitionJob: Sendable {
             let background = bubbleOnly ? LuminanceImage(cgImage: piece) : nil
             let height = Double(tile.end - tile.start)
             let blocks = BrowserModel.makeBlocks(lines, imageSize: CGSize(width: piece.width, height: piece.height),
-                                                 background: background)
+                                                 background: background, rightToLeft: rightToLeft)
             // Bóng thoại nằm ở phần chồng giữa 2 khung: chỉ lấy ở khung chứa tâm của nó.
             result += blocks.filter {
                 let midY = Double(tile.start) + Double($0.rect.midY) * height

@@ -124,6 +124,7 @@ enum SettingsKey {
     static let translationConsentAsked = "translationConsentAsked"
     static let maxBubbles = "maxBubbles"
     static let chapterPrefetch = "chapterPrefetch"
+    static let rightToLeft = "rightToLeft"
 
     // Trạng thái nội bộ (extension ghi)
     static let broadcastActive = "broadcastActive"
@@ -166,6 +167,8 @@ struct AppSettings {
     var maxBubbles: Int
     /// Trình duyệt: nhận dạng ngầm mọi ảnh truyện trên trang rồi dịch cả chương trong vài lần gửi.
     var chapterPrefetch: Bool
+    /// Manga Nhật: trong cùng một hàng tranh đọc từ phải sang trái.
+    var rightToLeft: Bool
 
     static let defaultValues: [String: Any] = [
         SettingsKey.engine: TranslatorEngine.google.rawValue,
@@ -183,6 +186,7 @@ struct AppSettings {
         SettingsKey.maxBubbles: 1,
         SettingsKey.bubbleTextOnly: true,
         SettingsKey.chapterPrefetch: true,
+        SettingsKey.rightToLeft: false,
         SettingsKey.ocrAccuracy: OCRAccuracy.accurate.rawValue,
         SettingsKey.marginTop: 0.05,
         SettingsKey.marginBottom: 0.08,
@@ -232,7 +236,8 @@ struct AppSettings {
             translationConsent: d.bool(forKey: SettingsKey.translationConsent),
             bubbleTextOnly: d.bool(forKey: SettingsKey.bubbleTextOnly),
             maxBubbles: min(6, max(1, d.integer(forKey: SettingsKey.maxBubbles))),
-            chapterPrefetch: d.bool(forKey: SettingsKey.chapterPrefetch)
+            chapterPrefetch: d.bool(forKey: SettingsKey.chapterPrefetch),
+            rightToLeft: d.bool(forKey: SettingsKey.rightToLeft)
         )
     }
 }

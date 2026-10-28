@@ -30,7 +30,23 @@ struct BubbleQueue {
             return blocks.filter { displayedMidY(for: $0) != nil }
         }
         let unseen = blocks.filter { !wasShown($0.key) }
-        return Array((unseen.isEmpty ? blocks : unseen).prefix(limit))
+        let pool = unseen.isEmpty ? blocks : unseen
+        var chosen = Array(pool.prefix(limit))
+        // Truyện kiểu cũ: nhiều bóng thoại nhỏ cạnh nhau trong cùng một hàng tranh được đọc liền nhau
+        // → hiện luôn cùng lúc (thêm tối đa `rowCompanions` bóng), không bắt cuộn từng chút một.
+        for block in pool.dropFirst(chosen.count) where chosen.count < limit + Self.rowCompanions
+            && chosen.contains(where: { Self.isSameRow($0, block) }) {
+            chosen.append(block)
+        }
+        return chosen
+    }
+
+    static let rowCompanions = 3
+
+    /// Hai bóng thoại nằm cùng một hàng tranh: chồng nhau theo chiều dọc ít nhất 30% bóng thấp hơn.
+    static func isSameRow(_ a: TextBlock, _ b: TextBlock) -> Bool {
+        let overlap = min(a.rect.maxY, b.rect.maxY) - max(a.rect.minY, b.rect.minY)
+        return overlap > min(a.rect.height, b.rect.height) * 0.3
     }
 
     /// Gọi khi các bóng thoại được đưa lên cửa sổ dịch.

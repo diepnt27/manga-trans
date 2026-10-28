@@ -20,6 +20,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.windowSize, store: AppGroup.defaults) private var windowSize: WindowSize = .small
     @AppStorage(SettingsKey.showOriginal, store: AppGroup.defaults) private var showOriginal = true
     @AppStorage(SettingsKey.readingZone, store: AppGroup.defaults) private var readingZone: ReadingZone = .middle
+    @AppStorage(SettingsKey.rightToLeft, store: AppGroup.defaults) private var rightToLeft = false
     @AppStorage(SettingsKey.maxBubbles, store: AppGroup.defaults) private var maxBubbles = 1
     @AppStorage(SettingsKey.bubbleTextOnly, store: AppGroup.defaults) private var bubbleTextOnly = true
     @AppStorage(SettingsKey.fontScale, store: AppGroup.defaults) private var fontScale = 0.8
@@ -152,6 +153,10 @@ struct SettingsView: View {
                     Stepper("Số bóng thoại mỗi lần: \(maxBubbles)", value: $maxBubbles, in: 1...6)
                     Picker("Vùng đọc", selection: $readingZone) {
                         ForEach(ReadingZone.allCases) { Text($0.title).tag($0) }
+                    }
+                    Picker("Hướng đọc", selection: $rightToLeft) {
+                        Text("Trái → phải (webtoon, truyện Âu Mỹ)").tag(false)
+                        Text("Phải → trái (manga Nhật)").tag(true)
                     }
                     Toggle("Hiện câu gốc", isOn: $showOriginal)
                     slider("Cỡ chữ", value: $fontScale, range: 0.6...1.6, step: 0.1, format: "×%.1f")

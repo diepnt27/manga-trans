@@ -404,7 +404,9 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         let screenScale = webView.window?.screen.scale ?? 2
         configuration.snapshotWidth = NSNumber(value: Double(Self.snapshotPixelWidth(for: webView.bounds.width) / screenScale))
         let minimumTextHeight = Self.minimumTextHeight
-        let bubbleOnly = AppSettings.load().bubbleTextOnly
+        let scanSettings = AppSettings.load()
+        let bubbleOnly = scanSettings.bubbleTextOnly
+        let rightToLeft = scanSettings.rightToLeft
         webView.takeSnapshot(with: configuration) { [weak self] image, _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -418,7 +420,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
                     guard !lines.isEmpty else { return [] }
                     let background = bubbleOnly ? LuminanceImage(cgImage: cgImage) : nil
                     return Self.makeBlocks(lines, imageSize: CGSize(width: cgImage.width, height: cgImage.height),
-                                           background: background)
+                                           background: background, rightToLeft: rightToLeft)
                 }.value
                 handler(blocks)
                 self.finishScan()
@@ -433,10 +435,11 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     }
 
     /// `background` có thì chỉ giữ chữ nằm trong bóng thoại / khung lời dẫn (nền đồng màu).
-    nonisolated static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize, background: LuminanceImage?) -> [TextBlock] {
+    nonisolated static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize, background: LuminanceImage?,
+                                       rightToLeft: Bool = false) -> [TextBlock] {
         let confident = lines.filter { $0.confidence >= 0.3 }
         let inBubbles = background.map { BubbleFilter.linesOnPlainBackground(confident, in: $0) } ?? confident
-        return TextGrouper.group(inBubbles, imageSize: imageSize)
+        return TextGrouper.group(inBubbles, imageSize: imageSize, rightToLeft: rightToLeft)
             .filter { !BubbleFilter.isNoise($0) }
     }
 

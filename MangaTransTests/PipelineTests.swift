@@ -659,3 +659,40 @@ final class DiscoverTests: XCTestCase {
         XCTAssertEqual(recs.map(\.title), ["Nano Machine", "Solo Leveling"])
     }
 }
+
+final class OldMangaLayoutTests: XCTestCase {
+    private func line(_ text: String, x: Double, y: Double, w: Double) -> OCRLine {
+        OCRLine(text: text, confidence: 1, x: x, y: y, w: w, h: 0.012)
+    }
+
+    /// Hai bóng thoại đặt sát nhau (cách hơn một dấu cách) không bị gộp làm một.
+    func testSideBySideBubblesStaySeparate() {
+        let lines = [
+            line("WHERE'D", x: 0.20, y: 0.300, w: 0.08), line("YOU COME", x: 0.19, y: 0.314, w: 0.10),
+            line("FROM?", x: 0.21, y: 0.326, w: 0.06),
+            line("WH-WHO", x: 0.29, y: 0.322, w: 0.07), line("ARE", x: 0.305, y: 0.336, w: 0.04),
+            line("YOU?", x: 0.30, y: 0.350, w: 0.05),
+        ]
+        let blocks = TextGrouper.group(lines, imageSize: CGSize(width: 1200, height: 1700))
+        XCTAssertEqual(blocks.map(\.displayText).sorted(), ["WH-WHO ARE YOU?", "WHERE'D YOU COME FROM?"])
+    }
+
+    func testRightToLeftReadingOrder() {
+        let lines = [line("LEFT BUBBLE", x: 0.1, y: 0.3, w: 0.15), line("RIGHT BUBBLE", x: 0.6, y: 0.3, w: 0.15)]
+        let size = CGSize(width: 1000, height: 1500)
+        XCTAssertEqual(TextGrouper.group(lines, imageSize: size).map(\.displayText), ["LEFT BUBBLE", "RIGHT BUBBLE"])
+        XCTAssertEqual(TextGrouper.group(lines, imageSize: size, rightToLeft: true).map(\.displayText),
+                       ["RIGHT BUBBLE", "LEFT BUBBLE"])
+    }
+
+    /// Chọn hiện 1 bóng mỗi lần nhưng hàng tranh có nhiều bóng nhỏ → hiện cả hàng; hàng dưới để lần sau.
+    func testBubblesInSameRowAreShownTogether() {
+        let lines = [
+            line("THAT'S CREEPY", x: 0.10, y: 0.30, w: 0.15), line("NOBODY'S HERE", x: 0.60, y: 0.295, w: 0.15),
+            line("DID I SCARE YA", x: 0.40, y: 0.60, w: 0.15),
+        ]
+        let blocks = TextGrouper.group(lines, imageSize: CGSize(width: 1000, height: 1500))
+        let chosen = BubbleQueue().select(blocks, maxCount: 1)
+        XCTAssertEqual(chosen.map(\.displayText), ["THAT'S CREEPY", "NOBODY'S HERE"])
+    }
+}

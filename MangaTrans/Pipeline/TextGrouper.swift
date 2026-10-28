@@ -16,7 +16,8 @@ struct TextBlock: Equatable {
 
 /// Gom các dòng OCR thành bóng thoại và sắp xếp theo thứ tự đọc (trên → dưới, trái → phải).
 enum TextGrouper {
-    static func group(_ lines: [OCRLine], imageSize: CGSize) -> [TextBlock] {
+    /// `rightToLeft`: manga Nhật — các bóng thoại cùng hàng đọc từ phải sang trái.
+    static func group(_ lines: [OCRLine], imageSize: CGSize, rightToLeft: Bool = false) -> [TextBlock] {
         guard !lines.isEmpty else { return [] }
         let sx = imageSize.width > 0 ? imageSize.width : 1
         let sy = imageSize.height > 0 ? imageSize.height : 1
@@ -45,7 +46,7 @@ enum TextGrouper {
         let blocks = groups.values.map { indices in
             makeBlock(indices.map { lines[$0] }, pixelRects: indices.map { rects[$0] })
         }
-        return sortedInReadingOrder(blocks)
+        return sortedInReadingOrder(blocks, rightToLeft: rightToLeft)
     }
 
     static func belongTogether(_ a: CGRect, _ b: CGRect) -> Bool {
@@ -57,9 +58,10 @@ enum TextGrouper {
         let vOverlap = min(a.maxY, b.maxY) - max(a.minY, b.minY)
         let hOverlap = min(a.maxX, b.maxX) - max(a.minX, b.minX)
 
-        // Cùng một hàng (Vision đôi khi tách một dòng làm hai).
+        // Cùng một hàng (Vision đôi khi tách một dòng làm hai, cách nhau cỡ một dấu cách).
+        // Xa hơn thế là 2 bóng thoại đặt sát nhau (truyện kiểu cũ nhiều bóng nhỏ) → không gộp.
         if vOverlap > hMin * 0.5 {
-            return hOverlap > -hMax * 1.2
+            return hOverlap > -hMax * 0.6
         }
         let vGap = -vOverlap
         guard vGap < hMax * 0.9 else { return false }
@@ -113,7 +115,7 @@ enum TextGrouper {
         return result
     }
 
-    private static func sortedInReadingOrder(_ blocks: [TextBlock]) -> [TextBlock] {
+    private static func sortedInReadingOrder(_ blocks: [TextBlock], rightToLeft: Bool) -> [TextBlock] {
         let byTop = blocks.sorted { $0.rect.minY < $1.rect.minY }
         var bands: [[TextBlock]] = []
         var bandBottom: CGFloat = -1
@@ -126,6 +128,8 @@ enum TextGrouper {
                 bandBottom = block.rect.maxY
             }
         }
-        return bands.flatMap { $0.sorted { $0.rect.minX < $1.rect.minX } }
+        return bands.flatMap { band in
+            band.sorted { rightToLeft ? $0.rect.maxX > $1.rect.maxX : $0.rect.minX < $1.rect.minX }
+        }
     }
 }
