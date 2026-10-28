@@ -70,6 +70,7 @@ final class BrowserTabs: ObservableObject {
     /// Dữ liệu duyệt web dùng chung cho mọi tab.
     func clearBrowsingData() {
         current.clearBrowsingData()
+        DiscoverStore.shared.clearHistory()
     }
 
     private func makeTab(_ url: String) -> BrowserModel {
@@ -79,7 +80,7 @@ final class BrowserTabs: ObservableObject {
     }
 
     private func save() {
-        let urls = tabs.map { $0.currentURL.isEmpty ? ($0.initialURL ?? BrowserModel.homeURL) : $0.currentURL }
+        let urls = tabs.map(\.persistedURL)
         UserDefaults.standard.set(urls, forKey: urlsKey)
         UserDefaults.standard.set(tabs.firstIndex { $0.id == selectedID } ?? 0, forKey: selectedKey)
     }

@@ -597,3 +597,65 @@ final class SpeechTests: XCTestCase {
         XCTAssertFalse(GoogleSpeech.isMP3(Data(("<html>" + String(repeating: " ", count: 400)).utf8)))
     }
 }
+
+@MainActor
+final class DiscoverTests: XCTestCase {
+    func testMangaNameFromChapterTitles() {
+        XCTAssertEqual(DiscoverStore.mangaName(fromTitle: "Read Nano Machine Chapter 31 Online - MangaRead"), "Nano Machine")
+        XCTAssertEqual(DiscoverStore.mangaName(fromTitle: "Nano Machine - Chapter 31 - MangaRead.org"), "Nano Machine")
+        XCTAssertEqual(DiscoverStore.mangaName(fromTitle: "Chapter 12 | Solo Leveling"), "Solo Leveling")
+        XCTAssertEqual(DiscoverStore.mangaName(fromTitle: "One Piece, Chapter 1100 – MANGA Plus"), "One Piece")
+    }
+
+    func testOnlyChapterPagesGoToHistory() {
+        XCTAssertTrue(DiscoverStore.isChapterPage(title: "Nano Machine Chapter 31", url: "https://example.com/manga/nano"))
+        XCTAssertTrue(DiscoverStore.isChapterPage(title: "Nano Machine", url: "https://example.com/manga/nano/chapter-31/"))
+        XCTAssertFalse(DiscoverStore.isChapterPage(title: "Google", url: "https://www.google.com/search?q=manga"))
+    }
+
+    func testHistoryKeepsOneEntryPerSeriesAndFeedsSites() {
+        let defaults = UserDefaults(suiteName: "tests-discover-\(UUID().uuidString)")!
+        let store = DiscoverStore(defaults: defaults)
+        store.recordVisit(pageTitle: "Nano Machine - Chapter 30", url: "https://www.mangaread.org/manga/nano/chapter-30/")
+        store.recordVisit(pageTitle: "Nano Machine - Chapter 31", url: "https://www.mangaread.org/manga/nano/chapter-31/")
+        store.recordVisit(pageTitle: "Google", url: "https://www.google.com")
+        XCTAssertEqual(store.history.count, 1)
+        XCTAssertEqual(store.history.first?.pageTitle, "Nano Machine - Chapter 31")
+        XCTAssertEqual(store.recentTitles(limit: 2), ["Nano Machine"])
+        // Trang hay đọc đứng đầu danh sách trang đọc truyện.
+        XCTAssertEqual(store.sites.first?.host, "mangaread.org")
+
+        store.hideSite(store.sites[0])
+        XCTAssertFalse(store.sites.contains { $0.host == "mangaread.org" })
+        XCTAssertTrue(store.addSite("mangaread.org"))
+        XCTAssertTrue(store.sites.contains { $0.host == "mangaread.org" })
+        XCTAssertFalse(store.addSite("not a site"))
+    }
+
+    func testSiteSearchFallsBackToGoogle() {
+        let dex = ReadingSite.defaults.first { $0.host == "mangadex.org" }!
+        XCTAssertEqual(dex.searchURL(for: "Solo Leveling"), "https://mangadex.org/search?q=Solo%20Leveling")
+        let other = ReadingSite(name: "x", url: "https://www.example.com")
+        XCTAssertTrue(other.searchURL(for: "Solo Leveling").hasPrefix("https://www.google.com/search?q=site:example.com"))
+    }
+
+    func testAniListParsing() throws {
+        let page = """
+        {"data":{"Page":{"media":[{"id":1,"title":{"english":null,"romaji":"Nano Machine","native":"나노마신"},
+        "coverImage":{"large":"https://img/1.jpg"},"genres":["Action","Fantasy"],"averageScore":82,"countryOfOrigin":"KR",
+        "chapters":null,"status":"RELEASING","siteUrl":"https://anilist.co/manga/1","description":"A <i>martial</i> tale.<br><br>Read it &amp; enjoy."}]}}}
+        """
+        let items = try AniList.parsePage(Data(page.utf8))
+        XCTAssertEqual(items.first?.title, "Nano Machine")
+        XCTAssertEqual(items.first?.originLabel, "Manhwa")
+        XCTAssertEqual(items.first?.summary, "A martial tale.\n\nRead it & enjoy.")
+
+        let rec = """
+        {"data":{"Media":{"id":1,"title":{"english":"Nano Machine"},"genres":[],
+        "recommendations":{"nodes":[{"mediaRecommendation":{"id":2,"title":{"english":"Solo Leveling"},"countryOfOrigin":"KR"}},
+        {"mediaRecommendation":null}]}}}}
+        """
+        let recs = try AniList.parseRecommendations(Data(rec.utf8))
+        XCTAssertEqual(recs.map(\.title), ["Nano Machine", "Solo Leveling"])
+    }
+}

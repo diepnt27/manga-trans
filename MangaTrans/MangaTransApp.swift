@@ -4,6 +4,11 @@ import SwiftUI
 struct MangaTransApp: App {
     @StateObject private var coordinator = TranslationCoordinator()
 
+    init() {
+        // Ảnh bìa truyện ở trang Tab mới: bộ nhớ đệm lớn hơn mặc định để cuộn lại không tải lại.
+        URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 200 << 20)
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

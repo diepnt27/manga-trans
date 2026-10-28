@@ -48,8 +48,14 @@ struct BrowserPage: View {
                 // nên khi chúng ẩn/hiện trang không bị co giãn hay nhảy.
                 ZStack(alignment: .top) {
                     WebViewHost(webView: model.webView)
-                    if model.isTranslationEnabled && displayMode == .overlay {
+                    if model.isTranslationEnabled && displayMode == .overlay && !model.showsStartPage {
                         OverlayLayer(model: model)
+                    }
+                    if model.showsStartPage {
+                        StartPageView { url in
+                            addressFocused = false
+                            model.load(url)
+                        }
                     }
                 }
                 .ignoresSafeArea(.container, edges: .bottom)
@@ -62,7 +68,7 @@ struct BrowserPage: View {
             .animation(.easeInOut(duration: 0.2), value: hidesBottomBars)
             // Khung dịch nằm trên cả thanh địa chỉ → kéo lên sát mép trên được, không chiếm chỗ đọc truyện.
             .overlay {
-                if model.isTranslationEnabled && displayMode == .panel {
+                if model.isTranslationEnabled && displayMode == .panel && !model.showsStartPage {
                     TranslationPanel(model: model)
                 }
             }
@@ -85,7 +91,10 @@ struct BrowserPage: View {
         }
         .onAppear { model.restoreIfNeeded() }
         .onChange(of: model.currentURL) { url in
-            if !addressFocused { address = url }
+            if !addressFocused && !model.showsStartPage { address = url }
+        }
+        .onChange(of: model.showsStartPage) { showsStart in
+            if !addressFocused { address = showsStart ? "" : model.currentURL }
         }
         .sheet(isPresented: $showBookmarks) {
             BookmarksSheet(model: model) { url in
@@ -98,8 +107,17 @@ struct BrowserPage: View {
     private var addressBar: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Nhập địa chỉ web hoặc tìm kiếm", text: $address)
+                // Nút nhà: mở trang Tab mới (trang đọc truyện, truyện gợi ý).
+                Button {
+                    addressFocused = false
+                    model.showStartPage()
+                } label: {
+                    Image(systemName: model.showsStartPage ? "house.fill" : "house")
+                        .foregroundStyle(model.showsStartPage ? Color.accentColor : Color.secondary)
+                }
+                .accessibilityLabel("Trang Tab mới")
+                TextField(model.showsStartPage ? "Tìm truyện hoặc nhập địa chỉ" : "Nhập địa chỉ web hoặc tìm kiếm",
+                          text: $address)
                     .keyboardType(.webSearch)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -132,7 +150,7 @@ struct BrowserPage: View {
 
     private var toolbar: some View {
         HStack {
-            toolbarButton("chevron.backward", enabled: model.canGoBack) { model.goBack() }
+            toolbarButton("chevron.backward", enabled: model.canNavigateBack) { model.goBack() }
             toolbarButton("chevron.forward", enabled: model.canGoForward) { model.goForward() }
             toolbarButton(model.isLoading ? "xmark" : "arrow.clockwise") { model.reload() }
             toolbarButton(model.isBookmarked ? "star.fill" : "star") { model.toggleBookmark() }
@@ -564,7 +582,7 @@ private struct TabCard: View {
                             .resizable()
                             .scaledToFill()
                     } else {
-                        Image(systemName: "doc.text.image")
+                        Image(systemName: model.showsStartPage ? "house" : "doc.text.image")
                             .font(.system(size: 30))
                             .foregroundStyle(.secondary)
                     }
@@ -589,7 +607,8 @@ private struct TabCard: View {
                 .padding(6)
                 .accessibilityLabel("Đóng tab")
             }
-            Text(model.title.isEmpty ? (URL(string: model.currentURL)?.host ?? "Tab mới") : model.title)
+            Text(model.showsStartPage ? "Tab mới"
+                 : model.title.isEmpty ? (URL(string: model.currentURL)?.host ?? "Tab mới") : model.title)
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
                 .foregroundStyle(isSelected ? Color.accentColor : Color.primary)

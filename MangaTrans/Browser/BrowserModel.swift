@@ -31,7 +31,9 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         var id: String { url }
     }
 
-    static let homeURL = "https://www.google.com"
+    /// Trang Tab mới (giao diện của app, không phải trang web).
+    static let startPageURL = "manga-browser://start"
+    static let homeURL = startPageURL
     static let idleStatus = "Dừng cuộn để dịch"
 
     let webView: WKWebView
@@ -39,6 +41,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     @Published private(set) var currentURL = ""
     @Published private(set) var title = ""
     @Published private(set) var hasPage = false
+    /// Đang hiện trang Tab mới (đè lên trang web, nếu có).
+    @Published private(set) var showsStartPage = false
     @Published private(set) var canGoBack = false
     @Published private(set) var canGoForward = false
     @Published private(set) var isLoading = false
@@ -116,8 +120,35 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     // MARK: - Điều hướng
 
     func restoreIfNeeded() {
-        guard !hasPage else { return }
+        guard !hasPage, !showsStartPage else { return }
         load(initialURL ?? Self.homeURL)
+    }
+
+    /// Có trang web đang đọc (không phải trang Tab mới) — mới quét và dịch.
+    private var isReadingPage: Bool { hasPage && !showsStartPage }
+
+    /// Địa chỉ lưu lại cho lần mở app sau.
+    var persistedURL: String {
+        if showsStartPage { return Self.startPageURL }
+        return currentURL.isEmpty ? (initialURL ?? Self.homeURL) : currentURL
+    }
+
+    /// Nút quay lại: từ trang Tab mới về trang web đang mở dưới nó.
+    var canNavigateBack: Bool { showsStartPage ? hasPage : canGoBack }
+
+    func showStartPage() {
+        guard !showsStartPage else { return }
+        showsStartPage = true
+        translateTask?.cancel()
+        chapterTimer?.invalidate()
+        chapter.reset()
+        SpeechReader.shared.stop()
+        overlays = []
+        entries = []
+        thumbnail = nil
+        isChromeHidden = false
+        status = Self.idleStatus
+        onPageFinished?()
     }
 
     func reloadBookmarks() {
@@ -125,7 +156,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     }
 
     func captureThumbnail() {
-        guard hasPage, webView.bounds.width > 0 else { return }
+        guard isReadingPage, webView.bounds.width > 0 else { return }
         let configuration = WKSnapshotConfiguration()
         configuration.snapshotWidth = 240
         webView.takeSnapshot(with: configuration) { [weak self] image, _ in
@@ -145,12 +176,26 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     }
 
     func load(_ input: String) {
+        if input == Self.startPageURL {
+            showStartPage()
+            return
+        }
         guard let url = Self.url(from: input) else { return }
         hasPage = true
+        showsStartPage = false
         webView.load(URLRequest(url: url))
     }
 
-    func goBack() { webView.goBack() }
+    func goBack() {
+        if showsStartPage {
+            showsStartPage = false
+            lastKeys = []
+            scheduleScan(after: 0.3)
+            onPageFinished?()
+        } else {
+            webView.goBack()
+        }
+    }
     func goForward() { webView.goForward() }
 
     /// Xoá cookie, bộ nhớ đệm, dữ liệu đăng nhập của các trang web và trang đọc dở.
@@ -319,7 +364,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     }
 
     private func scan(followUp: Bool) {
-        guard isTranslationEnabled, hasPage, webView.bounds.width > 0 else { return }
+        guard isTranslationEnabled, isReadingPage, webView.bounds.width > 0 else { return }
         if isScanning {
             needsRescan = true
             rescanFollowUp = rescanFollowUp || followUp
@@ -334,13 +379,13 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
 
     /// Dịch trước cả chương (ảnh mới tải thêm khi cuộn cũng được xử lý; tự giãn cách 8 giây).
     private func refreshChapter(force: Bool = false) {
-        guard isTranslationEnabled, hasPage else { return }
+        guard isTranslationEnabled, isReadingPage else { return }
         chapter.refresh(webView: webView, translation: translation, conversation: id.uuidString, force: force)
     }
 
     /// Quét lúc đang cuộn: chỉ dịch sẵn vào cache, không hiển thị.
     private func prefetchScan() {
-        guard isTranslationEnabled, hasPage, webView.bounds.width > 0 else { return }
+        guard isTranslationEnabled, isReadingPage, webView.bounds.width > 0 else { return }
         lastPrefetchScan = Date()
         captureBlocks(afterScreenUpdates: false) { [weak self] blocks in
             guard let self else { return }
@@ -506,6 +551,7 @@ extension BrowserModel: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         onPageFinished?()
+        DiscoverStore.shared.recordVisit(pageTitle: webView.title ?? "", url: webView.url?.absoluteString ?? "")
         scheduleScan(after: 0.6)
         // Chờ trang dựng xong danh sách ảnh rồi mới dịch trước cả chương.
         chapterTimer?.invalidate()
