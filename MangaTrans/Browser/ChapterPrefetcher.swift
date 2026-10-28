@@ -103,7 +103,7 @@ final class ChapterPrefetcher {
             session: session,
             referer: webView.url?.absoluteString,
             // Cùng độ phân giải và tỉ lệ khung với ảnh chụp màn hình lúc đọc → OCR ra cùng câu, khớp cache.
-            targetWidth: max(320, Int(webView.bounds.width * 2)),
+            targetWidth: max(320, Int(BrowserModel.snapshotPixelWidth(for: webView.bounds.width))),
             tileAspect: min(2.4, max(1.2, Double(webView.bounds.height / webView.bounds.width))),
             bubbleOnly: settings.bubbleTextOnly
         )

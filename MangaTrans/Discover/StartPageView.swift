@@ -187,7 +187,7 @@ struct StartPageView: View {
     private var sitesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("Trang đọc truyện")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 14) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 14) {
                 ForEach(store.sites) { site in
                     Button { open(site.url) } label: { SiteTile(name: site.name, host: site.host) }
                         .buttonStyle(.plain)

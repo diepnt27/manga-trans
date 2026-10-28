@@ -401,11 +401,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         isScanning = true
         let configuration = WKSnapshotConfiguration()
         configuration.afterScreenUpdates = afterScreenUpdates
-        // Chụp ở mật độ 2x thay vì 3x: ít hơn ~55% điểm ảnh cho OCR, chữ truyện vẫn đủ nét.
         let screenScale = webView.window?.screen.scale ?? 2
-        if screenScale > 2 {
-            configuration.snapshotWidth = NSNumber(value: Double(webView.bounds.width * 2 / screenScale))
-        }
+        configuration.snapshotWidth = NSNumber(value: Double(Self.snapshotPixelWidth(for: webView.bounds.width) / screenScale))
         let minimumTextHeight = Self.minimumTextHeight
         let bubbleOnly = AppSettings.load().bubbleTextOnly
         webView.takeSnapshot(with: configuration) { [weak self] image, _ in
@@ -427,6 +424,12 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
                 self.finishScan()
             }
         }
+    }
+
+    /// Độ rộng (pixel) ảnh chụp để nhận dạng chữ: mật độ 2x thay vì 3x (ít hơn ~55% điểm ảnh, chữ truyện vẫn đủ nét),
+    /// tối đa 1200 px — màn hình iPad lớn thì chữ truyện cũng to, không cần chụp nét hơn.
+    nonisolated static func snapshotPixelWidth(for pointWidth: CGFloat) -> CGFloat {
+        min(pointWidth * 2, 1200)
     }
 
     /// `background` có thì chỉ giữ chữ nằm trong bóng thoại / khung lời dẫn (nền đồng màu).

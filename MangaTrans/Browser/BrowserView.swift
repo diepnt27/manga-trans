@@ -527,7 +527,7 @@ private struct TabSwitcher: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)], spacing: 16) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 14)], spacing: 16) {
                     ForEach(tabs.tabs) { tab in
                         TabCard(model: tab, isSelected: tab.id == tabs.selectedID) {
                             tabs.select(tab.id)

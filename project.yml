@@ -28,7 +28,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
         INFOPLIST_FILE: MangaTrans/Info.plist
         CODE_SIGN_ENTITLEMENTS: MangaTrans/MangaTrans.entitlements
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: BroadcastExt
@@ -43,7 +43,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).BroadcastExt
         INFOPLIST_FILE: BroadcastExt/Info.plist
         CODE_SIGN_ENTITLEMENTS: BroadcastExt/BroadcastExt.entitlements
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         APPLICATION_EXTENSION_API_ONLY: YES
   MangaTransTests:
     type: bundle.unit-test
