@@ -41,12 +41,12 @@ enum TextGrouper {
         func together(_ i: Int, _ j: Int) -> Bool {
             guard let bubbles else { return belongTogether(rects[i], rects[j]) }
             switch (bubbles[i], bubbles[j]) {
-            case let (a?, b?) where a == b:
-                return belongTogether(rects[i], rects[j]) || sameBubbleNeighbors(rects[i], rects[j])
-            case (nil, nil):
-                return belongTogether(rects[i], rects[j])
+            case let (a?, b?):
+                // Khác bóng thoại (có viền ngăn cách) → không bao giờ gộp; cùng bóng → gộp dù cách xa hơn.
+                return a == b && (belongTogether(rects[i], rects[j]) || sameBubbleNeighbors(rects[i], rects[j]))
             default:
-                return false
+                // Dòng không tìm được bóng (điểm loang rơi vào chữ, bóng không viền kín): gộp theo khoảng cách như thường.
+                return belongTogether(rects[i], rects[j])
             }
         }
         for i in lines.indices {
@@ -61,7 +61,11 @@ enum TextGrouper {
 
         let blocks = groups.values.map { indices -> TextBlock in
             var block = makeBlock(indices.map { lines[$0] }, pixelRects: indices.map { rects[$0] })
-            if let id = bubbles?[indices[0]] { block.bubbleRect = bubbleRects[id] }
+            // Phủ bản dịch lên cả lòng bóng chỉ khi lòng bóng không quá lớn so với chữ (tránh che cả mảng tranh).
+            if let id = indices.lazy.compactMap({ bubbles?[$0] ?? nil }).first, let bubble = bubbleRects[id],
+               bubble.width * bubble.height <= block.rect.width * block.rect.height * 8 {
+                block.bubbleRect = bubble
+            }
             return block
         }
         return sortedInReadingOrder(blocks, rightToLeft: rightToLeft)

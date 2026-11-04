@@ -506,16 +506,20 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
             return TextGrouper.group(confident, imageSize: imageSize, rightToLeft: rightToLeft)
                 .filter { !BubbleFilter.isNoise($0) }
         }
-        // Dòng nằm trong một lòng bóng thoại / khung chữ: giữ hết, gom theo bóng thoại.
-        // Dòng còn lại: chỉ giữ nếu nền quanh nó trơn (bỏ chữ hiệu ứng, watermark vẽ đè lên tranh).
+        // Lòng bóng thoại chứa từng dòng: dùng để không gộp nhầm 2 bóng sát nhau và để phủ bản dịch kín bóng.
+        // Gộp các dòng vẫn theo khoảng cách (dòng không tìm được bóng không bị bỏ, câu không bị cụt).
         var segmenter = BubbleSegmenter(image: background)
         let (ids, bubbleRects) = segmenter.assign(confident)
-        let loose = confident.indices.filter { ids[$0] == nil }
-        let plainLoose = BubbleFilter.linesOnPlainBackground(loose.map { confident[$0] }, in: background,
-                                                             excluding: confident.map(\.rect))
-        let kept = confident.indices.filter { ids[$0] != nil || plainLoose.contains(confident[$0]) }
-        return TextGrouper.group(kept.map { confident[$0] }, imageSize: imageSize, rightToLeft: rightToLeft,
-                                 bubbles: kept.map { ids[$0] }, bubbleRects: bubbleRects)
+        let inBubble = confident.indices.filter { ids[$0] != nil }.map { confident[$0] }
+        let plain = BubbleFilter.linesOnPlainBackground(confident.filter { !inBubble.contains($0) }, in: background,
+                                                        excluding: confident.map(\.rect))
+        return TextGrouper.group(confident, imageSize: imageSize, rightToLeft: rightToLeft,
+                                 bubbles: ids, bubbleRects: bubbleRects)
+            .filter { block in
+                // Bỏ chữ hiệu ứng / watermark vẽ đè lên tranh: không dòng nào trong bóng thoại và phần lớn nền lổn nhổn.
+                block.lines.contains { inBubble.contains($0) }
+                    || block.lines.filter { plain.contains($0) }.count * 2 >= block.lines.count
+            }
             .filter { !BubbleFilter.isNoise($0) }
     }
 

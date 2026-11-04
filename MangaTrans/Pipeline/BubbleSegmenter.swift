@@ -75,7 +75,7 @@ struct BubbleSegmenter {
             groupRects[root] = groupRects[root].map { $0.union(regions[id].rect) } ?? regions[id].rect
         }
 
-        let ids: [Int?] = zip(pixelRects, candidates).map { rect, ids in
+        var ids: [Int?] = zip(pixelRects, candidates).map { rect, ids in
             var votes: [Int: Int] = [:]
             for id in ids {
                 let root = find(id)
@@ -84,6 +84,21 @@ struct BubbleSegmenter {
             }
             return votes.max { $0.value < $1.value }?.key
         }
+
+        // Bóng không viền kín (nền trời / nền trang sáng cùng màu): vùng loang tràn ra rất rộng so với chữ bên trong
+        // → không phải một bóng thoại, bỏ (không dùng để chặn gộp, không phủ bản dịch lên cả mảng nền).
+        var textArea: [Int: Double] = [:]
+        for (id, rect) in zip(ids, pixelRects) {
+            guard let id else { continue }
+            textArea[id, default: 0] += Double(rect.width * rect.height)
+        }
+        let leaky = Set(textArea.compactMap { id, area -> Int? in
+            guard let box = groupRects[id] else { return id }
+            let boxArea = Double(box.width) * w * Double(box.height) * h
+            return boxArea > area * 12 ? id : nil
+        })
+        ids = ids.map { id in id.flatMap { leaky.contains($0) ? nil : $0 } }
+        leaky.forEach { groupRects[$0] = nil }
         return (ids, groupRects)
     }
 

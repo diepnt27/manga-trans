@@ -779,6 +779,29 @@ final class BubbleSegmenterTests: XCTestCase {
         XCTAssertNotNil(blocks.first?.bubbleRect)
     }
 
+    /// Bóng không viền kín trên nền trời sáng: vùng loang tràn ra cả mảng trời → không coi là một bóng
+    /// (không phủ bản dịch lên cả mảng trời, 2 câu cách xa vẫn tách riêng, không bị bỏ).
+    func testBorderlessBubblesOnLightSkyAreNotOneHugeBubble() {
+        let yes = CGRect(x: 40, y: 100, width: 50, height: 8)
+        let ahem = CGRect(x: 120, y: 80, width: 30, height: 8)
+        var seed: UInt32 = 99
+        var pixels: [UInt8] = []
+        for y in 0..<height {
+            for x in 0..<width {
+                let point = CGPoint(x: Double(x) + 0.5, y: Double(y) + 0.5)
+                if yes.contains(point) || ahem.contains(point) { pixels.append(0); continue }
+                if y >= 60 && y < 160 { pixels.append(235); continue } // mảng trời sáng
+                seed = seed &* 1_103_515_245 &+ 12345
+                pixels.append(UInt8(truncatingIfNeeded: seed >> 16))
+            }
+        }
+        let image = LuminanceImage(width: width, height: height, pixels: pixels)
+        let blocks = BrowserModel.makeBlocks([line("YES SIR!", yes), line("AHEM!", ahem)],
+                                             imageSize: CGSize(width: 200, height: 400), background: image)
+        XCTAssertEqual(blocks.map(\.displayText).sorted(), ["AHEM!", "YES SIR!"])
+        XCTAssertTrue(blocks.allSatisfy { $0.bubbleRect == nil })
+    }
+
     /// Hai bóng chồng lên nhau (bóng sau có viền ngăn cách), dòng cuối bóng trên sát dòng đầu bóng dưới: không gộp.
     func testOverlappingBubblesStaySeparate() {
         let upper = [
