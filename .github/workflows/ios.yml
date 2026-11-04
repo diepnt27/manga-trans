@@ -105,10 +105,16 @@ jobs:
             MangaTrans-Lite.ipa
 
   test:
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+
+      - name: Chọn Xcode 16
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
 
       - name: Cài XcodeGen
         run: brew install xcodegen
