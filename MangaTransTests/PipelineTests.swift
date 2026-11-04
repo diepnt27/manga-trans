@@ -727,3 +727,72 @@ final class MangaDexTests: XCTestCase {
                        ["https://uploads.mangadex.org/data/abc/1.png", "https://uploads.mangadex.org/data/abc/2.png"])
     }
 }
+
+final class BubbleSegmenterTests: XCTestCase {
+    private let width = 200, height = 400
+
+    /// Ảnh giả: bóng thoại hình bầu dục (viền đen, lòng trắng) trên nền tranh lổn nhổn, chữ là các khối đen.
+    private func page(bubbles: [(cx: Double, cy: Double, rx: Double, ry: Double)], text: [CGRect]) -> LuminanceImage {
+        var seed: UInt32 = 4242
+        var pixels: [UInt8] = []
+        for y in 0..<height {
+            for x in 0..<width {
+                let px = Double(x) + 0.5, py = Double(y) + 0.5
+                if text.contains(where: { $0.contains(CGPoint(x: px, y: py)) }) { pixels.append(0); continue }
+                // Bóng sau cùng nằm trên cùng.
+                if let bubble = bubbles.reversed().first(where: { b in
+                    pow((px - b.cx) / b.rx, 2) + pow((py - b.cy) / b.ry, 2) <= 1
+                }) {
+                    let d = pow((px - bubble.cx) / bubble.rx, 2) + pow((py - bubble.cy) / bubble.ry, 2)
+                    pixels.append(d > 0.9 ? 0 : 250)
+                    continue
+                }
+                seed = seed &* 1_103_515_245 &+ 12345
+                pixels.append(UInt8(truncatingIfNeeded: seed >> 16))
+            }
+        }
+        return LuminanceImage(width: width, height: height, pixels: pixels)
+    }
+
+    private func line(_ text: String, _ rect: CGRect) -> OCRLine {
+        OCRLine(text: text, confidence: 1, x: Double(rect.minX) / 200, y: Double(rect.minY) / 400,
+                w: Double(rect.width) / 200, h: Double(rect.height) / 400)
+    }
+
+    /// Bóng bầu dục 5 dòng, các dòng giữa dài chạm sát viền: giữ đủ 5 dòng trong một bóng.
+    /// Chữ hiệu ứng vẽ thẳng lên tranh bên ngoài: bỏ.
+    func testOvalBubbleKeepsEdgeTouchingLinesAndDropsEffects() {
+        let rows = [
+            ("TODAY I WILL", CGRect(x: 50, y: 172, width: 100, height: 8)),
+            ("PASS THE TEST", CGRect(x: 38, y: 186, width: 124, height: 8)),
+            ("NO MATTER", CGRect(x: 36, y: 200, width: 128, height: 8)),
+            ("HOW DIFFICULT", CGRect(x: 44, y: 214, width: 112, height: 8)),
+            ("IT IS!", CGRect(x: 60, y: 228, width: 80, height: 8)),
+        ]
+        let effect = ("HAHAHA", CGRect(x: 20, y: 330, width: 50, height: 8))
+        let image = page(bubbles: [(100, 205, 70, 50)], text: (rows + [effect]).map(\.1))
+        let blocks = BrowserModel.makeBlocks((rows + [effect]).map { line($0.0, $0.1) },
+                                             imageSize: CGSize(width: 200, height: 400), background: image)
+        XCTAssertEqual(blocks.map(\.displayText), ["TODAY I WILL PASS THE TEST NO MATTER HOW DIFFICULT IT IS!"])
+        XCTAssertNotNil(blocks.first?.bubbleRect)
+    }
+
+    /// Hai bóng chồng lên nhau (bóng sau có viền ngăn cách), dòng cuối bóng trên sát dòng đầu bóng dưới: không gộp.
+    func testOverlappingBubblesStaySeparate() {
+        let upper = [
+            ("ALRIGHT", CGRect(x: 50, y: 106, width: 40, height: 8)),
+            ("LISTEN UP", CGRect(x: 30, y: 120, width: 80, height: 8)),
+            ("EVERY", CGRect(x: 25, y: 134, width: 75, height: 8)),
+            ("ONE", CGRect(x: 40, y: 150, width: 48, height: 8)),
+        ]
+        let lower = [
+            ("TILL THEN", CGRect(x: 86, y: 164, width: 64, height: 8)),
+            ("NOT ALLOWED", CGRect(x: 80, y: 178, width: 80, height: 8)),
+            ("TO LEAVE", CGRect(x: 85, y: 192, width: 70, height: 8)),
+        ]
+        let image = page(bubbles: [(70, 130, 50, 40), (120, 190, 50, 40)], text: (upper + lower).map(\.1))
+        let blocks = BrowserModel.makeBlocks((upper + lower).map { line($0.0, $0.1) },
+                                             imageSize: CGSize(width: 200, height: 400), background: image)
+        XCTAssertEqual(blocks.map(\.displayText), ["ALRIGHT LISTEN UP EVERY ONE", "TILL THEN NOT ALLOWED TO LEAVE"])
+    }
+}

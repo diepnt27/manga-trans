@@ -19,6 +19,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         let id: Int
         /// Toạ độ chuẩn hoá 0...1 theo khung web.
         let rect: CGRect
+        /// `rect` là cả lòng bóng thoại (không chỉ phần chữ).
+        let fillsBubble: Bool
         /// Chiều cao dòng chữ gốc (chuẩn hoá) — để chọn cỡ chữ.
         let lineHeight: CGFloat
         let text: String
@@ -435,7 +437,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
                     let lines = (try? TextRecognizer.recognize(cgImage: cgImage, accuracy: .accurate,
                                                                minimumTextHeight: minimumTextHeight)) ?? []
                     guard !lines.isEmpty else { return [] }
-                    let background = bubbleOnly ? LuminanceImage(cgImage: cgImage) : nil
+                    // Đủ nét để giữ viền bóng thoại khi loang tìm lòng bóng.
+                    let background = bubbleOnly ? LuminanceImage(cgImage: cgImage, maxWidth: 480) : nil
                     return Self.makeBlocks(lines, imageSize: CGSize(width: cgImage.width, height: cgImage.height),
                                            background: background, rightToLeft: rightToLeft)
                 }.value
@@ -455,8 +458,21 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     nonisolated static func makeBlocks(_ lines: [OCRLine], imageSize: CGSize, background: LuminanceImage?,
                                        rightToLeft: Bool = false) -> [TextBlock] {
         let confident = lines.filter { $0.confidence >= 0.3 }
-        let inBubbles = background.map { BubbleFilter.linesOnPlainBackground(confident, in: $0) } ?? confident
-        return TextGrouper.group(inBubbles, imageSize: imageSize, rightToLeft: rightToLeft)
+        guard let background else {
+            return TextGrouper.group(confident, imageSize: imageSize, rightToLeft: rightToLeft)
+                .filter { !BubbleFilter.isNoise($0) }
+        }
+        // Dòng nằm trong một lòng bóng thoại / khung chữ: giữ hết, gom theo bóng thoại.
+        // Dòng còn lại: chỉ giữ nếu nền quanh nó trơn (bỏ chữ hiệu ứng, watermark vẽ đè lên tranh).
+        var segmenter = BubbleSegmenter(image: background)
+        let ids = segmenter.bubbleIDs(for: confident)
+        let loose = confident.indices.filter { ids[$0] == nil }
+        let plainLoose = BubbleFilter.linesOnPlainBackground(loose.map { confident[$0] }, in: background,
+                                                             excluding: confident.map(\.rect))
+        let kept = confident.indices.filter { ids[$0] != nil || plainLoose.contains(confident[$0]) }
+        let bubbleRects = Dictionary(uniqueKeysWithValues: segmenter.regions.enumerated().map { ($0.offset, $0.element.rect) })
+        return TextGrouper.group(kept.map { confident[$0] }, imageSize: imageSize, rightToLeft: rightToLeft,
+                                 bubbles: kept.map { ids[$0] }, bubbleRects: bubbleRects)
             .filter { !BubbleFilter.isNoise($0) }
     }
 
@@ -551,7 +567,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         overlays = zip(blocks, results).enumerated().map { index, item in
             let (block, result) = item
             let lineHeight = block.lines.map(\.h).reduce(0, +) / Double(max(1, block.lines.count))
-            return Overlay(id: index, rect: block.rect, lineHeight: CGFloat(lineHeight), text: result.0, state: result.1)
+            return Overlay(id: index, rect: block.bubbleRect ?? block.rect, fillsBubble: block.bubbleRect != nil,
+                           lineHeight: CGFloat(lineHeight), text: result.0, state: result.1)
         }
     }
 }

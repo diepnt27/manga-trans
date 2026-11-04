@@ -101,8 +101,10 @@ enum BubbleFilter {
 
     /// Giữ các dòng chữ nằm trên nền đồng màu (bóng thoại, khung lời dẫn); bỏ dòng vẽ đè lên tranh
     /// (chữ hiệu ứng, chữ viết tay cạnh bóng thoại, watermark). Lọc trước khi gộp để không dính vào bóng thoại thật.
-    static func linesOnPlainBackground(_ lines: [OCRLine], in image: LuminanceImage, threshold: Double = 0.72) -> [OCRLine] {
-        let rects = lines.map(\.rect)
+    /// `excluding`: vị trí mọi dòng chữ trên ảnh (mặc định: chính các dòng đang xét) — không lấy mẫu nền đè lên chữ.
+    static func linesOnPlainBackground(_ lines: [OCRLine], in image: LuminanceImage, threshold: Double = 0.72,
+                                       excluding textRects: [CGRect]? = nil) -> [OCRLine] {
+        let rects = textRects ?? lines.map(\.rect)
         return lines.filter { line in
             guard let uniformity = backgroundUniformity(around: line.rect, lineHeight: line.h,
                                                         excluding: rects, in: image) else { return true }

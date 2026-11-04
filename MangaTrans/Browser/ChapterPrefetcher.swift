@@ -314,7 +314,7 @@ struct RecognitionJob: Sendable {
             guard hasText else { continue }
             let lines = (try? TextRecognizer.recognize(cgImage: piece, accuracy: .accurate, minimumTextHeight: 0.005)) ?? []
             guard !lines.isEmpty else { continue }
-            let background = bubbleOnly ? LuminanceImage(cgImage: piece) : nil
+            let background = bubbleOnly ? LuminanceImage(cgImage: piece, maxWidth: 480) : nil
             let height = Double(tile.end - tile.start)
             let blocks = BrowserModel.makeBlocks(lines, imageSize: CGSize(width: piece.width, height: piece.height),
                                                  background: background, rightToLeft: rightToLeft)

@@ -12,12 +12,17 @@ struct TextBlock: Equatable {
     var translationInput: String
     /// Khoá so sánh/cache.
     var key: String
+    /// Khung lòng bóng thoại chứa chữ (nếu tìm được) — để bản dịch phủ kín bóng thoại.
+    var bubbleRect: CGRect? = nil
 }
 
 /// Gom các dòng OCR thành bóng thoại và sắp xếp theo thứ tự đọc (trên → dưới, trái → phải).
 enum TextGrouper {
     /// `rightToLeft`: manga Nhật — các bóng thoại cùng hàng đọc từ phải sang trái.
-    static func group(_ lines: [OCRLine], imageSize: CGSize, rightToLeft: Bool = false) -> [TextBlock] {
+    /// `bubbles`: mã bóng thoại của từng dòng (từ `BubbleSegmenter`); dòng khác bóng không bao giờ bị gộp,
+    /// dòng cùng bóng được gộp dù cách xa hơn bình thường. `bubbleRects`: khung lòng bóng thoại theo mã.
+    static func group(_ lines: [OCRLine], imageSize: CGSize, rightToLeft: Bool = false,
+                      bubbles: [Int?]? = nil, bubbleRects: [Int: CGRect] = [:]) -> [TextBlock] {
         guard !lines.isEmpty else { return [] }
         let sx = imageSize.width > 0 ? imageSize.width : 1
         let sy = imageSize.height > 0 ? imageSize.height : 1
@@ -33,8 +38,19 @@ enum TextGrouper {
             }
             return i
         }
+        func together(_ i: Int, _ j: Int) -> Bool {
+            guard let bubbles else { return belongTogether(rects[i], rects[j]) }
+            switch (bubbles[i], bubbles[j]) {
+            case let (a?, b?) where a == b:
+                return belongTogether(rects[i], rects[j]) || sameBubbleNeighbors(rects[i], rects[j])
+            case (nil, nil):
+                return belongTogether(rects[i], rects[j])
+            default:
+                return false
+            }
+        }
         for i in lines.indices {
-            for j in (i + 1)..<lines.count where belongTogether(rects[i], rects[j]) {
+            for j in (i + 1)..<lines.count where together(i, j) {
                 let a = find(i), b = find(j)
                 if a != b { parent[b] = a }
             }
@@ -43,8 +59,10 @@ enum TextGrouper {
         var groups: [Int: [Int]] = [:]
         for i in lines.indices { groups[find(i), default: []].append(i) }
 
-        let blocks = groups.values.map { indices in
-            makeBlock(indices.map { lines[$0] }, pixelRects: indices.map { rects[$0] })
+        let blocks = groups.values.map { indices -> TextBlock in
+            var block = makeBlock(indices.map { lines[$0] }, pixelRects: indices.map { rects[$0] })
+            if let id = bubbles?[indices[0]] { block.bubbleRect = bubbleRects[id] }
+            return block
         }
         return sortedInReadingOrder(blocks, rightToLeft: rightToLeft)
     }
@@ -67,6 +85,15 @@ enum TextGrouper {
         guard vGap < hMax * 0.9 else { return false }
         // Chữ trong bóng thoại thường căn giữa: chồng nhau theo chiều ngang hoặc có tâm gần nhau.
         return hOverlap > 0 || abs(a.midX - b.midX) < max(a.width, b.width) * 0.6
+    }
+
+    /// Hai dòng trong cùng một lòng bóng thoại: cho phép cách xa hơn (giãn dòng rộng, chữ cỡ khác nhau),
+    /// miễn là xếp chồng theo chiều dọc.
+    static func sameBubbleNeighbors(_ a: CGRect, _ b: CGRect) -> Bool {
+        let hMax = max(a.height, b.height)
+        let vGap = max(a.minY, b.minY) - min(a.maxY, b.maxY)
+        let hOverlap = min(a.maxX, b.maxX) - max(a.minX, b.minX)
+        return vGap < hMax * 2.5 && (hOverlap > 0 || abs(a.midX - b.midX) < max(a.width, b.width))
     }
 
     private static func makeBlock(_ lines: [OCRLine], pixelRects: [CGRect]) -> TextBlock {

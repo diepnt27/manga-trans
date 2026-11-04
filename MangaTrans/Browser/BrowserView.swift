@@ -540,9 +540,12 @@ private struct OverlayLayer: View {
     private func frameFor(_ overlay: BrowserModel.Overlay, in size: CGSize) -> CGRect {
         let rect = CGRect(x: overlay.rect.minX * size.width, y: overlay.rect.minY * size.height,
                           width: overlay.rect.width * size.width, height: overlay.rect.height * size.height)
-        // Nới rộng một chút: tiếng Việt thường dài hơn tiếng Anh.
-        let grown = rect.insetBy(dx: -max(8, rect.width * 0.08), dy: -max(6, rect.height * 0.12))
-        return grown.intersection(CGRect(origin: .zero, size: size))
+        // Cả lòng bóng thoại: thu vào một chút để nằm gọn trong bóng hình bầu dục, phủ kín chữ Anh.
+        // Chỉ có khung chữ: nới rộng một chút vì tiếng Việt thường dài hơn tiếng Anh.
+        let fitted = overlay.fillsBubble
+            ? rect.insetBy(dx: rect.width * 0.1, dy: rect.height * 0.1)
+            : rect.insetBy(dx: -max(8, rect.width * 0.08), dy: -max(6, rect.height * 0.12))
+        return fitted.intersection(CGRect(origin: .zero, size: size))
     }
 
     private func fontSize(_ overlay: BrowserModel.Overlay, in size: CGSize) -> CGFloat {
