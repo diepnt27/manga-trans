@@ -8,6 +8,24 @@ enum BrowserDisplayMode: String, CaseIterable, Identifiable {
     case panel
     /// Bản dịch đè thẳng lên bóng thoại.
     case overlay
+    /// Quả bóng nổi: chạm để dịch cả màn hình (đè lên bóng thoại), cuộn thì về tiếng Anh.
+    case tapToTranslate
+
+    var next: BrowserDisplayMode {
+        switch self {
+        case .panel: return .overlay
+        case .overlay: return .tapToTranslate
+        case .tapToTranslate: return .panel
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .panel: return "rectangle.topthird.inset.filled"
+        case .overlay: return "text.bubble.fill"
+        case .tapToTranslate: return "hand.tap.fill"
+        }
+    }
 
     var id: String { rawValue }
 }
@@ -48,7 +66,7 @@ struct BrowserPage: View {
                 // nên khi chúng ẩn/hiện trang không bị co giãn hay nhảy.
                 ZStack(alignment: .top) {
                     WebViewHost(webView: model.webView)
-                    if model.isTranslationEnabled && displayMode == .overlay && !model.showsStartPage {
+                    if model.isTranslationEnabled && displayMode != .panel && !model.showsStartPage {
                         OverlayLayer(model: model)
                     }
                     if model.showsStartPage {
@@ -70,6 +88,9 @@ struct BrowserPage: View {
             .overlay {
                 if model.isTranslationEnabled && displayMode == .panel && !model.showsStartPage {
                     TranslationPanel(model: model)
+                }
+                if model.isTranslationEnabled && displayMode == .tapToTranslate && !model.showsStartPage {
+                    TranslateBall(model: model)
                 }
             }
             .overlay(alignment: .bottomLeading) {
@@ -169,10 +190,15 @@ struct BrowserPage: View {
                 .frame(maxWidth: .infinity, minHeight: 36)
             }
             .accessibilityLabel("Các tab (\(tabCount))")
-            toolbarButton(displayMode == .panel ? "rectangle.topthird.inset.filled" : "text.bubble.fill") {
-                displayMode = displayMode == .panel ? .overlay : .panel
-                // Kiểu khung chỉ dịch bóng đang hiện, kiểu đè cần dịch hết bóng trên màn hình.
-                model.rescan()
+            // Đổi kiểu: khung dịch → đè lên bóng thoại → chạm để dịch (quả bóng nổi).
+            toolbarButton(displayMode.icon) {
+                displayMode = displayMode.next
+                if displayMode == .tapToTranslate {
+                    model.toggleTapTranslation()
+                } else {
+                    // Kiểu khung chỉ dịch bóng đang hiện, kiểu đè cần dịch hết bóng trên màn hình.
+                    model.rescan()
+                }
             }
             .disabled(!model.isTranslationEnabled)
             toolbarButton(model.isTranslationEnabled ? "character.bubble.fill" : "character.bubble",
@@ -426,6 +452,77 @@ private struct TranslationPanel: View {
 }
 
 /// Bản dịch đè lên đúng vị trí bóng thoại. Ẩn khi đang cuộn, không chặn thao tác chạm.
+/// Chế độ chạm để dịch: quả bóng nhỏ kéo đi đâu cũng được (thả ra thì tự dạt vào mép gần nhất).
+/// Chạm → dịch mọi bóng thoại đang thấy, chữ Việt đè lên bóng thoại; cuộn trang hoặc chạm lần nữa → về tiếng Anh.
+private struct TranslateBall: View {
+    @ObservedObject var model: BrowserModel
+    /// 0 = mép trái, 1 = mép phải; vị trí dọc theo tỉ lệ màn hình.
+    @AppStorage("translateBallX") private var storedX = 1.0
+    @AppStorage("translateBallY") private var storedY = 0.5
+    @State private var drag: CGSize = .zero
+
+    private let size: CGFloat = 54
+    private let margin: CGFloat = 8
+
+    var body: some View {
+        GeometryReader { geo in
+            let base = basePosition(in: geo.size)
+            ball
+                .position(x: base.x + drag.width, y: base.y + drag.height)
+                .gesture(
+                    DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                        .onChanged { drag = $0.translation }
+                        .onEnded { value in
+                            let x = base.x + value.translation.width
+                            let y = base.y + value.translation.height
+                            let range = verticalRange(in: geo.size)
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                storedX = x < geo.size.width / 2 ? 0 : 1
+                                storedY = min(1, max(0, (y - range.lowerBound) / max(1, range.upperBound - range.lowerBound)))
+                                drag = .zero
+                            }
+                        }
+                )
+                .onTapGesture {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    model.toggleTapTranslation()
+                }
+        }
+    }
+
+    private var ball: some View {
+        let active = !model.overlays.isEmpty
+        return ZStack {
+            Circle()
+                .fill(active ? Color.accentColor : Color.black.opacity(0.62))
+                .overlay(Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
+            if model.isScanning && !active {
+                ProgressView().tint(.white)
+            } else {
+                Image(systemName: active ? "character.bubble.fill" : "character.bubble")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: size, height: size)
+        .opacity(model.isScrolling ? 0.45 : 0.95)
+        .contentShape(Circle())
+        .accessibilityLabel(active ? "Tắt bản dịch" : "Dịch cả màn hình")
+    }
+
+    private func verticalRange(in area: CGSize) -> ClosedRange<CGFloat> {
+        let low = margin + size / 2 + 50 // tránh thanh địa chỉ
+        return low...max(low, area.height - margin - size / 2 - 60) // tránh thanh công cụ
+    }
+
+    private func basePosition(in area: CGSize) -> CGPoint {
+        let range = verticalRange(in: area)
+        let x = storedX < 0.5 ? margin + size / 2 : area.width - margin - size / 2
+        return CGPoint(x: x, y: range.lowerBound + (range.upperBound - range.lowerBound) * storedY)
+    }
+}
+
 private struct OverlayLayer: View {
     @ObservedObject var model: BrowserModel
 

@@ -80,7 +80,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     private var translateTask: Task<Void, Never>?
     /// Tăng mỗi lần cuộn — kết quả OCR của khung hình cũ sẽ bị bỏ.
     private var generation = 0
-    private var isScanning = false
+    /// Đang nhận dạng chữ (quả bóng chạm để dịch hiện vòng quay).
+    @Published private(set) var isScanning = false
     private var needsRescan = false
     private var rescanFollowUp = false
     private var lastKeys: [String] = []
@@ -217,6 +218,23 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     }
 
     /// Dịch lại vùng đang xem (bỏ qua kết quả cũ).
+    /// Chế độ chạm để dịch (quả bóng nổi): không tự dịch khi dừng cuộn.
+    private var isTapToTranslate: Bool {
+        UserDefaults.standard.string(forKey: BrowserDisplayMode.storageKey) == BrowserDisplayMode.tapToTranslate.rawValue
+    }
+
+    /// Quả bóng: đang hiện bản dịch thì tắt (về tiếng Anh), chưa thì dịch mọi bóng thoại đang thấy trên màn hình.
+    func toggleTapTranslation() {
+        if overlays.isEmpty {
+            rescan()
+        } else {
+            translateTask?.cancel()
+            overlays = []
+            lastKeys = []
+            status = Self.idleStatus
+        }
+    }
+
     func rescan() {
         lastKeys = []
         scan(followUp: false)
@@ -357,8 +375,10 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         scanTimer?.invalidate()
         scanTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                self?.isScrolling = false
-                self?.scan(followUp: true)
+                guard let self else { return }
+                self.isScrolling = false
+                // Chế độ chạm để dịch: chỉ dịch khi người đọc chạm quả bóng.
+                if !self.isTapToTranslate { self.scan(followUp: true) }
             }
         }
     }
@@ -484,7 +504,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         if !focused.isEmpty { focusedKeys = Set(focused.map(\.key)) }
 
         // Kiểu khung dịch: chỉ dịch các bóng đang hiện trong khung (đỡ tốn token). Kiểu đè lên bóng thoại: dịch hết.
-        let panelOnly = UserDefaults.standard.string(forKey: BrowserDisplayMode.storageKey) != BrowserDisplayMode.overlay.rawValue
+        let mode = UserDefaults.standard.string(forKey: BrowserDisplayMode.storageKey)
+        let panelOnly = mode == nil || mode == BrowserDisplayMode.panel.rawValue
         let targets = panelOnly ? blocks.filter { focusedKeys.contains($0.key) } : blocks
         guard !targets.isEmpty else {
             status = Self.idleStatus
