@@ -509,12 +509,11 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         // Dòng nằm trong một lòng bóng thoại / khung chữ: giữ hết, gom theo bóng thoại.
         // Dòng còn lại: chỉ giữ nếu nền quanh nó trơn (bỏ chữ hiệu ứng, watermark vẽ đè lên tranh).
         var segmenter = BubbleSegmenter(image: background)
-        let ids = segmenter.bubbleIDs(for: confident)
+        let (ids, bubbleRects) = segmenter.assign(confident)
         let loose = confident.indices.filter { ids[$0] == nil }
         let plainLoose = BubbleFilter.linesOnPlainBackground(loose.map { confident[$0] }, in: background,
                                                              excluding: confident.map(\.rect))
         let kept = confident.indices.filter { ids[$0] != nil || plainLoose.contains(confident[$0]) }
-        let bubbleRects = Dictionary(uniqueKeysWithValues: segmenter.regions.enumerated().map { ($0.offset, $0.element.rect) })
         return TextGrouper.group(kept.map { confident[$0] }, imageSize: imageSize, rightToLeft: rightToLeft,
                                  bubbles: kept.map { ids[$0] }, bubbleRects: bubbleRects)
             .filter { !BubbleFilter.isNoise($0) }
