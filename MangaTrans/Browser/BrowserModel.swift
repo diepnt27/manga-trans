@@ -86,6 +86,9 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     @Published private(set) var isScanning = false
     /// Quả bóng đã được chạm: bản dịch đè lên mọi bóng thoại trên màn hình; cuộn trang thì tắt.
     @Published private(set) var isWholeScreenShown = false
+    /// Tự dịch cả màn hình: số giây hiện tiếng Việt (còn chờ bản dịch) và hẹn giờ về tiếng Anh.
+    private var autoHideDelay: TimeInterval?
+    private var autoHideTimer: Timer?
     private var needsRescan = false
     private var rescanFollowUp = false
     private var lastKeys: [String] = []
@@ -173,6 +176,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     func close() {
         webView.stopLoading()
         scanTimer?.invalidate()
+        autoHideTimer?.invalidate()
         followUpTimer?.invalidate()
         translateTask?.cancel()
         chapterTimer?.invalidate()
@@ -223,14 +227,52 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
 
     /// Quả bóng dịch cả màn hình: đang hiện bản dịch đè lên trang thì tắt (về tiếng Anh),
     /// chưa thì dịch mọi bóng thoại đang thấy trên màn hình — khung dịch phía trên vẫn chạy như thường.
+    /// Bấm tay thì bản dịch giữ nguyên tới khi cuộn trang (không tự tắt như chế độ tự dịch).
     func toggleWholeScreenTranslation() {
-        if isWholeScreenShown {
+        cancelAutoHide()
+        if isWholeScreenShown && !overlays.isEmpty {
             isWholeScreenShown = false
             overlays = []
         } else {
             isWholeScreenShown = true
             rescan()
         }
+    }
+
+    // MARK: - Tự dịch cả màn hình khi dừng cuộn
+
+    nonisolated static let autoWholeScreenKey = "autoWholeScreen"
+    nonisolated static let autoWholeScreenSecondsKey = "autoWholeScreenSeconds"
+
+    /// Dừng cuộn: nếu bật "tự dịch cả màn hình" thì đè chữ Việt lên mọi bóng thoại, rồi tự về tiếng Anh sau X giây.
+    /// Chỉ dùng cùng khung dịch và quả bóng (kiểu đè lên bóng thoại vốn đã luôn hiện bản dịch).
+    private func startAutoWholeScreenIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: Self.autoWholeScreenKey),
+              defaults.string(forKey: BrowserDisplayMode.storageKey) != BrowserDisplayMode.overlay.rawValue,
+              defaults.object(forKey: BrowserDisplayMode.ballKey) as? Bool ?? true else { return }
+        isWholeScreenShown = true
+        autoHideDelay = min(30, max(1, defaults.object(forKey: Self.autoWholeScreenSecondsKey) as? Double ?? 5))
+    }
+
+    /// Bản dịch đã hiện đủ: đếm ngược X giây rồi về tiếng Anh.
+    private func scheduleAutoHideIfNeeded(_ results: [(String, PiPEntry.State)]) {
+        guard let delay = autoHideDelay, isWholeScreenShown, !results.contains(where: { $0.1 == .pending }) else { return }
+        autoHideDelay = nil
+        autoHideTimer?.invalidate()
+        autoHideTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.isWholeScreenShown else { return }
+                self.isWholeScreenShown = false
+                self.overlays = []
+            }
+        }
+    }
+
+    private func cancelAutoHide() {
+        autoHideTimer?.invalidate()
+        autoHideTimer = nil
+        autoHideDelay = nil
     }
 
     /// Dịch lại vùng đang xem (bỏ qua kết quả cũ).
@@ -325,6 +367,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
             isScrolling = true
             overlays = []
             isWholeScreenShown = false
+            cancelAutoHide()
             autoHideChrome = UserDefaults.standard.object(forKey: Self.autoHideChromeKey) as? Bool ?? true
             let settings = AppSettings.load()
             stableDelay = max(0.25, settings.stableDelay)
@@ -377,6 +420,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
             Task { @MainActor in
                 guard let self else { return }
                 self.isScrolling = false
+                self.startAutoWholeScreenIfNeeded()
                 self.scan(followUp: true)
             }
         }
@@ -570,6 +614,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
             return Overlay(id: index, rect: block.bubbleRect ?? block.rect, fillsBubble: block.bubbleRect != nil,
                            lineHeight: CGFloat(lineHeight), text: result.0, state: result.1)
         }
+        scheduleAutoHideIfNeeded(results)
     }
 }
 

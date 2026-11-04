@@ -34,6 +34,8 @@ struct SettingsView: View {
 
     @AppStorage(BrowserModel.autoHideChromeKey) private var autoHideChrome = true
     @AppStorage(BrowserDisplayMode.ballKey) private var showsTranslateBall = true
+    @AppStorage(BrowserModel.autoWholeScreenKey) private var autoWholeScreen = false
+    @AppStorage(BrowserModel.autoWholeScreenSecondsKey) private var autoWholeScreenSeconds = 5.0
     @AppStorage(SpeechSettingsKey.engine) private var speechEngine: SpeechEngine = .defaultEngine
     @AppStorage(SpeechSettingsKey.voice) private var speechVoice = ""
     @AppStorage(SpeechSettingsKey.rate) private var speechRate = 1.0
@@ -170,10 +172,17 @@ struct SettingsView: View {
                 Section {
                     Toggle("Tự ẩn thanh công cụ khi cuộn", isOn: $autoHideChrome)
                     Toggle("Quả bóng dịch cả màn hình", isOn: $showsTranslateBall)
+                    if showsTranslateBall {
+                        Toggle("Tự dịch cả màn hình khi dừng cuộn", isOn: $autoWholeScreen)
+                        if autoWholeScreen {
+                            slider("Hiện tiếng Việt trong", value: $autoWholeScreenSeconds, range: 1...20, step: 1,
+                                   format: "%.0f giây")
+                        }
+                    }
                 } header: {
                     Text("Trình duyệt")
                 } footer: {
-                    Text("Cuộn xuống để đọc: thanh công cụ và thanh tab ẩn đi. Cuộn ngược lên một chút hoặc về đầu trang để hiện lại. Quả bóng (đi cùng khung dịch): chạm để dịch đè chữ Việt lên mọi bóng thoại đang thấy, cuộn trang hoặc chạm lần nữa thì về tiếng Anh; kéo để di chuyển, giữ lâu để ẩn.")
+                    Text("Cuộn xuống để đọc: thanh công cụ và thanh tab ẩn đi. Cuộn ngược lên một chút hoặc về đầu trang để hiện lại. Quả bóng (đi cùng khung dịch): chạm để dịch đè chữ Việt lên mọi bóng thoại đang thấy, cuộn trang hoặc chạm lần nữa thì về tiếng Anh; kéo để di chuyển, giữ lâu để ẩn. Tự dịch cả màn hình: dừng cuộn là chữ Việt tự đè lên mọi bóng thoại, sau số giây đã chọn thì về tiếng Anh; bấm quả bóng để xem lại tiếng Việt (giữ tới khi cuộn).")
                 }
 
                 Section {
