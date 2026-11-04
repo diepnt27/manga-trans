@@ -54,25 +54,45 @@ enum BubbleFilter {
         let padY = lineHeight * 0.15, padX = padY * aspect
         let blocked = textRects.map { $0.insetBy(dx: -padX, dy: -padY) }
 
-        let steps = 24
-        var samples: [UInt8] = []
-        samples.reserveCapacity(steps * 16)
-        for i in 0...steps {
-            let t = Double(i) / Double(steps)
-            // Hai vòng: sát mép ngoài và giữa vành.
-            for inset in [0.0, 0.5] {
-                let ix = marginX * inset, iy = marginY * inset
-                let left = Double(outer.minX) + ix, right = Double(outer.maxX) - ix
-                let top = Double(outer.minY) + iy, bottom = Double(outer.maxY) - iy
-                let x = left + (right - left) * t
-                let y = top + (bottom - top) * t
-                for point in [(x, top), (x, bottom), (left, y), (right, y)] {
-                    if blocked.contains(where: { $0.contains(CGPoint(x: point.0, y: point.1)) }) { continue }
-                    if let v = image.value(atX: point.0, y: point.1) { samples.append(v) }
-                }
+        // Điểm lấy mẫu rải đều theo chu vi: dòng chữ dài thì hai cạnh trên/dưới chiếm phần lớn,
+        // không để hai mép trái/phải ngắn (hay chạm viền khung lời dẫn, tranh phía sau) chiếm nửa số điểm.
+        let widthPx = Double(outer.width) * Double(image.width)
+        let heightPx = Double(outer.height) * Double(image.height)
+        let spacing = max(1, (widthPx + heightPx) * 2 / 96)
+        let horizontalSteps = max(2, Int(widthPx / spacing))
+        let verticalSteps = max(2, Int(heightPx / spacing))
+        var aboveBelow: [UInt8] = []
+        var sides: [UInt8] = []
+        func sample(_ x: Double, _ y: Double, into list: inout [UInt8]) {
+            if blocked.contains(where: { $0.contains(CGPoint(x: x, y: y)) }) { return }
+            if let v = image.value(atX: x, y: y) { list.append(v) }
+        }
+        // Hai vòng: sát mép ngoài và giữa vành.
+        for inset in [0.0, 0.5] {
+            let ix = marginX * inset, iy = marginY * inset
+            let left = Double(outer.minX) + ix, right = Double(outer.maxX) - ix
+            let top = Double(outer.minY) + iy, bottom = Double(outer.maxY) - iy
+            for i in 0...horizontalSteps {
+                let x = left + (right - left) * Double(i) / Double(horizontalSteps)
+                sample(x, top, into: &aboveBelow)
+                sample(x, bottom, into: &aboveBelow)
+            }
+            for i in 0...verticalSteps {
+                let y = top + (bottom - top) * Double(i) / Double(verticalSteps)
+                sample(left, y, into: &sides)
+                sample(right, y, into: &sides)
             }
         }
-        guard samples.count >= 12 else { return nil }
+        let all = aboveBelow + sides
+        guard all.count >= 12 else { return nil }
+        // Khung lời dẫn / bóng thoại nhiều dòng: khoảng trống trên/dưới dòng (giữa các dòng) là nền trơn
+        // dù hai mép trái/phải chạm tranh → vẫn tính là chữ trong khung.
+        let lineGaps = aboveBelow.count >= 12 ? closeness(aboveBelow) : 0
+        return max(closeness(all), lineGaps)
+    }
+
+    /// Tỉ lệ điểm có cùng độ sáng với trung vị (±28).
+    private static func closeness(_ samples: [UInt8]) -> Double {
         let sorted = samples.sorted()
         let median = Int(sorted[sorted.count / 2])
         let close = samples.filter { abs(Int($0) - median) <= 28 }.count

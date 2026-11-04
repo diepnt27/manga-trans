@@ -82,9 +82,13 @@ final class ChapterPrefetcher {
 
     private func run(webView: WKWebView, translation: TranslationService, conversation: String,
                      settings: AppSettings) async {
-        guard let page = await Self.collectImages(in: webView) else {
+        guard var page = await Self.collectImages(in: webView) else {
             progress.note = "Không đọc được danh sách ảnh của trang"
             return
+        }
+        // MangaDex chỉ tạo ảnh cho vài trang gần chỗ đang xem → lấy danh sách ảnh cả chương từ API của MangaDex.
+        if let chapter = MangaDex.chapterID(from: webView.url), let images = await MangaDex.pageImages(chapter: chapter) {
+            page.images = images
         }
         let fresh = page.images.filter { !processed.contains($0) }
         // Ít ảnh lớn → không giống trang đọc truyện (trang tìm kiếm, trang tin...) → bỏ qua.
@@ -142,6 +146,8 @@ final class ChapterPrefetcher {
                 func startDownload(_ index: Int) -> Task<RecognitionJob.Download, Never>? {
                     guard index < fresh.count else { return nil }
                     let url = fresh[index]
+                    // Ảnh blob: chỉ đọc được từ bên trong trang web.
+                    if url.hasPrefix("blob:") { return Task { @MainActor in await Self.blobData(url, in: webView) } }
                     return Task.detached(priority: .medium) { await job.download(url) }
                 }
                 var next = startDownload(0)
@@ -178,7 +184,7 @@ final class ChapterPrefetcher {
 
     private struct PageImages: Decodable {
         let userAgent: String
-        let images: [String]
+        var images: [String]
     }
 
     /// Ảnh lớn (gần hết bề ngang trang) theo thứ tự từ trên xuống, kể cả ảnh chưa tải (lazy load: data-src...).
@@ -198,7 +204,7 @@ final class ChapterPrefetcher {
           }
         }
         try { src = new URL(src.trim(), document.baseURI).href; } catch (e) { continue; }
-        if (!/^https?:/.test(src) || seen.has(src) || skip.test(src)) continue;
+        if (!/^(https?|blob):/.test(src) || seen.has(src) || skip.test(src)) continue;
         const box = img.getBoundingClientRect();
         if (box.width < vw * 0.5 && img.naturalWidth < 500) continue;
         if (box.height > 0 && box.height < 80) continue;
@@ -218,6 +224,27 @@ final class ChapterPrefetcher {
         }
         guard let json else { return nil }
         return try? JSONDecoder().decode(PageImages.self, from: Data(json.utf8))
+    }
+
+    /// Đọc ảnh `blob:` (trang tự tải ảnh rồi tạo địa chỉ tạm, như MangaDex) bằng chính trang web.
+    private static func blobData(_ url: String, in webView: WKWebView) async -> RecognitionJob.Download {
+        let script = """
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(blob);
+        });
+        """
+        guard let result = try? await webView.callAsyncJavaScript(script, arguments: ["url": url], contentWorld: .page),
+              let dataURL = result as? String,
+              let comma = dataURL.firstIndex(of: ","),
+              let data = Data(base64Encoded: String(dataURL[dataURL.index(after: comma)...])) else {
+            return .failed("Không đọc được ảnh của trang")
+        }
+        return .loaded(data)
     }
 
     private static func cookies(of webView: WKWebView) async -> [HTTPCookie] {
@@ -348,5 +375,36 @@ struct RecognitionJob: Sendable {
             kCGImageSourceShouldCacheImmediately: true,
         ]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+}
+
+/// MangaDex: danh sách ảnh cả chương qua API công khai (at-home server), không cần đăng nhập.
+enum MangaDex {
+    /// `https://mangadex.org/chapter/<uuid>/<trang>` → uuid.
+    static func chapterID(from url: URL?) -> String? {
+        guard let url, let host = url.host, host == "mangadex.org" || host.hasSuffix(".mangadex.org") else { return nil }
+        let parts = url.pathComponents
+        guard let index = parts.firstIndex(of: "chapter"), index + 1 < parts.count else { return nil }
+        let id = parts[index + 1]
+        return UUID(uuidString: id) == nil ? nil : id.lowercased()
+    }
+
+    static func pageImages(chapter: String) async -> [String]? {
+        guard let url = URL(string: "https://api.mangadex.org/at-home/server/\(chapter)"),
+              let data = try? await HTTP.send(URLRequest(url: url, timeoutInterval: 15)) else { return nil }
+        return try? parse(data)
+    }
+
+    static func parse(_ data: Data) throws -> [String] {
+        struct Response: Decodable {
+            struct Chapter: Decodable {
+                let hash: String
+                let data: [String]
+            }
+            let baseUrl: String
+            let chapter: Chapter
+        }
+        let response = try JSONDecoder().decode(Response.self, from: data)
+        return response.chapter.data.map { "\(response.baseUrl)/data/\(response.chapter.hash)/\($0)" }
     }
 }

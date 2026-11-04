@@ -544,6 +544,22 @@ final class BubbleFilterTests: XCTestCase {
         XCTAssertEqual(BubbleFilter.linesOnPlainBackground([dialogue, effect], in: page).map(\.text), ["BOTH OF YOU"])
     }
 
+    /// Khung lời dẫn chữ nhật đặt đè lên tranh (manhua màu): hai mép trái/phải sát tranh phía sau
+    /// nhưng khoảng trống giữa các dòng là nền trơn → giữ đủ mọi dòng.
+    func testNarrationBoxOverArtworkKeepsEveryLine() {
+        var seed: UInt32 = 777
+        let box = CGRect(x: 0.29, y: 0.2, width: 0.42, height: 0.2)
+        let rows = (0..<5).map { CGRect(x: 0.3, y: 0.21 + Double($0) * 0.032, width: 0.4, height: 0.02) }
+        let page = image { x, y in
+            if rows.contains(where: { self.contains($0, x, y) }) { return 0 }
+            if self.contains(box, x, y) { return 245 }
+            seed = seed &* 1_103_515_245 &+ 12345
+            return UInt8(truncatingIfNeeded: seed >> 16)
+        }
+        let lines = rows.enumerated().map { line("LINE \($0.offset)", $0.element) }
+        XCTAssertEqual(BubbleFilter.linesOnPlainBackground(lines, in: page).count, 5)
+    }
+
     func testNoiseText() {
         XCTAssertTrue(BubbleFilter.isNoise(block("REAPERSCANS.COM")))
         XCTAssertTrue(BubbleFilter.isNoise(block("www.mangaread.org")))
@@ -694,5 +710,20 @@ final class OldMangaLayoutTests: XCTestCase {
         let blocks = TextGrouper.group(lines, imageSize: CGSize(width: 1000, height: 1500))
         let chosen = BubbleQueue().select(blocks, maxCount: 1)
         XCTAssertEqual(chosen.map(\.displayText), ["THAT'S CREEPY", "NOBODY'S HERE"])
+    }
+}
+
+final class MangaDexTests: XCTestCase {
+    func testChapterIDFromReaderURL() {
+        XCTAssertEqual(MangaDex.chapterID(from: URL(string: "https://mangadex.org/chapter/478ea66f-aad3-4dfd-947b-aeac66d2d606/3")),
+                       "478ea66f-aad3-4dfd-947b-aeac66d2d606")
+        XCTAssertNil(MangaDex.chapterID(from: URL(string: "https://mangadex.org/title/478ea66f-aad3-4dfd-947b-aeac66d2d606")))
+        XCTAssertNil(MangaDex.chapterID(from: URL(string: "https://example.com/chapter/478ea66f-aad3-4dfd-947b-aeac66d2d606")))
+    }
+
+    func testAtHomeResponseBuildsPageURLs() throws {
+        let json = #"{"result":"ok","baseUrl":"https://uploads.mangadex.org","chapter":{"hash":"abc","data":["1.png","2.png"],"dataSaver":["1.jpg"]}}"#
+        XCTAssertEqual(try MangaDex.parse(Data(json.utf8)),
+                       ["https://uploads.mangadex.org/data/abc/1.png", "https://uploads.mangadex.org/data/abc/2.png"])
     }
 }
