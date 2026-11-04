@@ -82,6 +82,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
     private var generation = 0
     /// Đang nhận dạng chữ (quả bóng chạm để dịch hiện vòng quay).
     @Published private(set) var isScanning = false
+    /// Quả bóng đã được chạm: bản dịch đè lên mọi bóng thoại trên màn hình; cuộn trang thì tắt.
+    @Published private(set) var isWholeScreenShown = false
     private var needsRescan = false
     private var rescanFollowUp = false
     private var lastKeys: [String] = []
@@ -217,24 +219,19 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         if isLoading { webView.stopLoading() } else { webView.reload() }
     }
 
-    /// Dịch lại vùng đang xem (bỏ qua kết quả cũ).
-    /// Chế độ chạm để dịch (quả bóng nổi): không tự dịch khi dừng cuộn.
-    private var isTapToTranslate: Bool {
-        UserDefaults.standard.string(forKey: BrowserDisplayMode.storageKey) == BrowserDisplayMode.tapToTranslate.rawValue
-    }
-
-    /// Quả bóng: đang hiện bản dịch thì tắt (về tiếng Anh), chưa thì dịch mọi bóng thoại đang thấy trên màn hình.
-    func toggleTapTranslation() {
-        if overlays.isEmpty {
-            rescan()
-        } else {
-            translateTask?.cancel()
+    /// Quả bóng dịch cả màn hình: đang hiện bản dịch đè lên trang thì tắt (về tiếng Anh),
+    /// chưa thì dịch mọi bóng thoại đang thấy trên màn hình — khung dịch phía trên vẫn chạy như thường.
+    func toggleWholeScreenTranslation() {
+        if isWholeScreenShown {
+            isWholeScreenShown = false
             overlays = []
-            lastKeys = []
-            status = Self.idleStatus
+        } else {
+            isWholeScreenShown = true
+            rescan()
         }
     }
 
+    /// Dịch lại vùng đang xem (bỏ qua kết quả cũ).
     func rescan() {
         lastKeys = []
         scan(followUp: false)
@@ -325,6 +322,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
         if !isScrolling {
             isScrolling = true
             overlays = []
+            isWholeScreenShown = false
             autoHideChrome = UserDefaults.standard.object(forKey: Self.autoHideChromeKey) as? Bool ?? true
             let settings = AppSettings.load()
             stableDelay = max(0.25, settings.stableDelay)
@@ -377,8 +375,7 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
             Task { @MainActor in
                 guard let self else { return }
                 self.isScrolling = false
-                // Chế độ chạm để dịch: chỉ dịch khi người đọc chạm quả bóng.
-                if !self.isTapToTranslate { self.scan(followUp: true) }
+                self.scan(followUp: true)
             }
         }
     }
@@ -505,7 +502,8 @@ final class BrowserModel: NSObject, ObservableObject, Identifiable {
 
         // Kiểu khung dịch: chỉ dịch các bóng đang hiện trong khung (đỡ tốn token). Kiểu đè lên bóng thoại: dịch hết.
         let mode = UserDefaults.standard.string(forKey: BrowserDisplayMode.storageKey)
-        let panelOnly = mode == nil || mode == BrowserDisplayMode.panel.rawValue
+        // Chạm quả bóng: dịch hết bóng trên màn hình để đè chữ Việt lên trang.
+        let panelOnly = mode != BrowserDisplayMode.overlay.rawValue && !isWholeScreenShown
         let targets = panelOnly ? blocks.filter { focusedKeys.contains($0.key) } : blocks
         guard !targets.isEmpty else {
             status = Self.idleStatus

@@ -8,24 +8,9 @@ enum BrowserDisplayMode: String, CaseIterable, Identifiable {
     case panel
     /// Bản dịch đè thẳng lên bóng thoại.
     case overlay
-    /// Quả bóng nổi: chạm để dịch cả màn hình (đè lên bóng thoại), cuộn thì về tiếng Anh.
-    case tapToTranslate
 
-    var next: BrowserDisplayMode {
-        switch self {
-        case .panel: return .overlay
-        case .overlay: return .tapToTranslate
-        case .tapToTranslate: return .panel
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .panel: return "rectangle.topthird.inset.filled"
-        case .overlay: return "text.bubble.fill"
-        case .tapToTranslate: return "hand.tap.fill"
-        }
-    }
+    /// Hiện quả bóng "dịch cả màn hình" cùng khung dịch.
+    static let ballKey = "translateBallEnabled"
 
     var id: String { rawValue }
 }
@@ -52,6 +37,7 @@ struct BrowserPage: View {
     let tabCount: Int
     let showTabs: () -> Void
     @AppStorage(BrowserDisplayMode.storageKey) private var displayMode: BrowserDisplayMode = .panel
+    @AppStorage(BrowserDisplayMode.ballKey) private var showsBall = true
     @State private var address = ""
     @State private var showBookmarks = false
     /// Toàn màn hình: ẩn thanh địa chỉ, thanh công cụ và thanh tab để dành chỗ cho truyện.
@@ -66,7 +52,8 @@ struct BrowserPage: View {
                 // nên khi chúng ẩn/hiện trang không bị co giãn hay nhảy.
                 ZStack(alignment: .top) {
                     WebViewHost(webView: model.webView)
-                    if model.isTranslationEnabled && displayMode != .panel && !model.showsStartPage {
+                    if model.isTranslationEnabled && (displayMode == .overlay || model.isWholeScreenShown)
+                        && !model.showsStartPage {
                         OverlayLayer(model: model)
                     }
                     if model.showsStartPage {
@@ -89,8 +76,8 @@ struct BrowserPage: View {
                 if model.isTranslationEnabled && displayMode == .panel && !model.showsStartPage {
                     TranslationPanel(model: model)
                 }
-                if model.isTranslationEnabled && displayMode == .tapToTranslate && !model.showsStartPage {
-                    TranslateBall(model: model)
+                if model.isTranslationEnabled && displayMode == .panel && showsBall && !model.showsStartPage {
+                    TranslateBall(model: model) { showsBall = false }
                 }
             }
             .overlay(alignment: .bottomLeading) {
@@ -190,15 +177,10 @@ struct BrowserPage: View {
                 .frame(maxWidth: .infinity, minHeight: 36)
             }
             .accessibilityLabel("Các tab (\(tabCount))")
-            // Đổi kiểu: khung dịch → đè lên bóng thoại → chạm để dịch (quả bóng nổi).
-            toolbarButton(displayMode.icon) {
-                displayMode = displayMode.next
-                if displayMode == .tapToTranslate {
-                    model.toggleTapTranslation()
-                } else {
-                    // Kiểu khung chỉ dịch bóng đang hiện, kiểu đè cần dịch hết bóng trên màn hình.
-                    model.rescan()
-                }
+            toolbarButton(displayMode == .panel ? "rectangle.topthird.inset.filled" : "text.bubble.fill") {
+                displayMode = displayMode == .panel ? .overlay : .panel
+                // Kiểu khung chỉ dịch bóng đang hiện, kiểu đè cần dịch hết bóng trên màn hình.
+                model.rescan()
             }
             .disabled(!model.isTranslationEnabled)
             toolbarButton(model.isTranslationEnabled ? "character.bubble.fill" : "character.bubble",
@@ -452,10 +434,12 @@ private struct TranslationPanel: View {
 }
 
 /// Bản dịch đè lên đúng vị trí bóng thoại. Ẩn khi đang cuộn, không chặn thao tác chạm.
-/// Chế độ chạm để dịch: quả bóng nhỏ kéo đi đâu cũng được (thả ra thì tự dạt vào mép gần nhất).
+/// Quả bóng dịch cả màn hình (đi cùng khung dịch): kéo đi đâu cũng được, thả ra thì tự dạt vào mép gần nhất.
 /// Chạm → dịch mọi bóng thoại đang thấy, chữ Việt đè lên bóng thoại; cuộn trang hoặc chạm lần nữa → về tiếng Anh.
+/// Giữ lâu để ẩn (bật lại trong Cài đặt).
 private struct TranslateBall: View {
     @ObservedObject var model: BrowserModel
+    let hide: () -> Void
     /// 0 = mép trái, 1 = mép phải; vị trí dọc theo tỉ lệ màn hình.
     @AppStorage("translateBallX") private var storedX = 1.0
     @AppStorage("translateBallY") private var storedY = 0.5
@@ -485,13 +469,18 @@ private struct TranslateBall: View {
                 )
                 .onTapGesture {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    model.toggleTapTranslation()
+                    model.toggleWholeScreenTranslation()
+                }
+                .contextMenu {
+                    Button(role: .destructive, action: hide) {
+                        Label("Ẩn quả bóng (bật lại trong Cài đặt)", systemImage: "eye.slash")
+                    }
                 }
         }
     }
 
     private var ball: some View {
-        let active = !model.overlays.isEmpty
+        let active = model.isWholeScreenShown && !model.overlays.isEmpty
         return ZStack {
             Circle()
                 .fill(active ? Color.accentColor : Color.black.opacity(0.62))

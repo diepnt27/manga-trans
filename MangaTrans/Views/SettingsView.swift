@@ -33,6 +33,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.marginBottom, store: AppGroup.defaults) private var marginBottom = 0.08
 
     @AppStorage(BrowserModel.autoHideChromeKey) private var autoHideChrome = true
+    @AppStorage(BrowserDisplayMode.ballKey) private var showsTranslateBall = true
     @AppStorage(SpeechSettingsKey.engine) private var speechEngine: SpeechEngine = .defaultEngine
     @AppStorage(SpeechSettingsKey.voice) private var speechVoice = ""
     @AppStorage(SpeechSettingsKey.rate) private var speechRate = 1.0
@@ -168,10 +169,11 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Tự ẩn thanh công cụ khi cuộn", isOn: $autoHideChrome)
+                    Toggle("Quả bóng dịch cả màn hình", isOn: $showsTranslateBall)
                 } header: {
                     Text("Trình duyệt")
                 } footer: {
-                    Text("Cuộn xuống để đọc: thanh công cụ và thanh tab ẩn đi. Cuộn ngược lên một chút hoặc về đầu trang để hiện lại.")
+                    Text("Cuộn xuống để đọc: thanh công cụ và thanh tab ẩn đi. Cuộn ngược lên một chút hoặc về đầu trang để hiện lại. Quả bóng (đi cùng khung dịch): chạm để dịch đè chữ Việt lên mọi bóng thoại đang thấy, cuộn trang hoặc chạm lần nữa thì về tiếng Anh; kéo để di chuyển, giữ lâu để ẩn.")
                 }
 
                 Section {
