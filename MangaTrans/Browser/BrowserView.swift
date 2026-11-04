@@ -11,6 +11,9 @@ enum BrowserDisplayMode: String, CaseIterable, Identifiable {
 
     /// Hiện quả bóng "dịch cả màn hình" cùng khung dịch.
     static let ballKey = "translateBallEnabled"
+    /// Hiện khung dịch nổi ở trên; tắt thì chỉ dùng quả bóng / tự dịch cả màn hình,
+    /// trạng thái và nút loa chuyển xuống thanh công cụ dưới.
+    static let panelKey = "translationPanelVisible"
 
     var id: String { rawValue }
 }
@@ -38,6 +41,7 @@ struct BrowserPage: View {
     let showTabs: () -> Void
     @AppStorage(BrowserDisplayMode.storageKey) private var displayMode: BrowserDisplayMode = .panel
     @AppStorage(BrowserDisplayMode.ballKey) private var showsBall = true
+    @AppStorage(BrowserDisplayMode.panelKey) private var showsPanel = true
     @State private var address = ""
     @State private var showBookmarks = false
     /// Toàn màn hình: ẩn thanh địa chỉ, thanh công cụ và thanh tab để dành chỗ cho truyện.
@@ -73,7 +77,7 @@ struct BrowserPage: View {
             .animation(.easeInOut(duration: 0.2), value: hidesBottomBars)
             // Khung dịch nằm trên cả thanh địa chỉ → kéo lên sát mép trên được, không chiếm chỗ đọc truyện.
             .overlay {
-                if model.isTranslationEnabled && displayMode == .panel && !model.showsStartPage {
+                if model.isTranslationEnabled && displayMode == .panel && showsPanel && !model.showsStartPage {
                     TranslationPanel(model: model)
                 }
                 if model.isTranslationEnabled && displayMode == .panel && showsBall && !model.showsStartPage {
@@ -157,6 +161,20 @@ struct BrowserPage: View {
     }
 
     private var toolbar: some View {
+        VStack(spacing: 0) {
+            // Tắt khung dịch: trạng thái, ⚡︎, loa, dịch lại nằm ở đây (vuốt lên cho thanh công cụ hiện ra).
+            if model.isTranslationEnabled && displayMode == .panel && !showsPanel && !model.showsStartPage {
+                HStack(spacing: 6) { TranslationControls(model: model) }
+                    .font(.footnote.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.top, 6)
+            }
+            toolbarButtons
+        }
+        .background(Color(white: 0.08))
+    }
+
+    private var toolbarButtons: some View {
         HStack {
             toolbarButton("chevron.backward", enabled: model.canNavigateBack) { model.goBack() }
             toolbarButton("chevron.forward", enabled: model.canGoForward) { model.goForward() }
@@ -189,7 +207,6 @@ struct BrowserPage: View {
             }
         }
         .padding(.vertical, 6)
-        .background(Color(white: 0.08))
     }
 
     private var hidesBottomBars: Bool { isFullScreen || model.isChromeHidden }
@@ -216,6 +233,55 @@ struct WebViewHost: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView { webView }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
+}
+
+/// Trạng thái dịch, số bóng dịch sẵn của chương (⚡︎), nút loa và nút dịch lại.
+/// Nằm ở đầu khung dịch; tắt khung dịch thì chuyển xuống thanh công cụ dưới.
+private struct TranslationControls: View {
+    @ObservedObject var model: BrowserModel
+    @ObservedObject private var speech = SpeechReader.shared
+
+    var body: some View {
+        Text(model.status)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        Spacer(minLength: 0)
+        // Số bóng thoại của chương đã dịch sẵn (đang chuẩn bị: tia sét rỗng). Bấm để xem chi tiết.
+        let chapter = model.chapterProgress
+        if chapter.isVisible {
+            Menu {
+                Text("Ảnh truyện: đã quét \(chapter.scanned)/\(chapter.images)")
+                if chapter.failedImages > 0 { Text("Tải lỗi: \(chapter.failedImages) ảnh") }
+                Text("Bóng thoại tìm thấy: \(chapter.bubbles)")
+                Text("Đã dịch sẵn: \(chapter.ready)")
+                if let note = chapter.note { Text(note) }
+                if chapter.working { Text("Đang chạy…") }
+            } label: {
+                Label("\(chapter.ready)", systemImage: chapter.working ? "bolt" : "bolt.fill")
+                    .font(.caption2)
+                    .foregroundStyle(chapter.note != nil && chapter.ready == 0 ? Color.red : Color.orange)
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(minWidth: 34, minHeight: 24)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Dịch trước cả chương: đã dịch sẵn \(chapter.ready) bóng thoại")
+        }
+        // Loa: đọc to câu tiếng Anh của các bóng thoại đang hiện; bấm lần nữa để dừng.
+        Button { speech.toggle(model.entries.map(\.original)) } label: {
+            Image(systemName: speech.isSpeaking ? "speaker.wave.2.fill" : "speaker.wave.2")
+                .foregroundStyle(speech.isSpeaking ? Color.orange : Color.accentColor)
+                .frame(width: 34, height: 24)
+        }
+        .disabled(model.entries.isEmpty)
+        .accessibilityLabel(speech.isSpeaking ? "Dừng đọc" : "Đọc câu tiếng Anh")
+        Button { model.rescan() } label: {
+            Image(systemName: "arrow.triangle.2.circlepath").frame(width: 30, height: 24)
+        }
+        .accessibilityLabel("Dịch lại")
+    }
 }
 
 /// Khung dịch nổi: kéo được, thu gọn được.
@@ -329,45 +395,7 @@ private struct TranslationPanel: View {
         // Thanh đầu mỏng: chỗ để kéo khung, trạng thái và 2 nút nhỏ.
         HStack(spacing: 6) {
             Capsule().fill(Color.white.opacity(0.25)).frame(width: 30, height: 4)
-            Text(model.status)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer(minLength: 0)
-            // Số bóng thoại của chương đã dịch sẵn (đang chuẩn bị: tia sét rỗng). Bấm để xem chi tiết.
-            let chapter = model.chapterProgress
-            if chapter.isVisible {
-                Menu {
-                    Text("Ảnh truyện: đã quét \(chapter.scanned)/\(chapter.images)")
-                    if chapter.failedImages > 0 { Text("Tải lỗi: \(chapter.failedImages) ảnh") }
-                    Text("Bóng thoại tìm thấy: \(chapter.bubbles)")
-                    Text("Đã dịch sẵn: \(chapter.ready)")
-                    if let note = chapter.note { Text(note) }
-                    if chapter.working { Text("Đang chạy…") }
-                } label: {
-                    Label("\(chapter.ready)", systemImage: chapter.working ? "bolt" : "bolt.fill")
-                        .font(.caption2)
-                        .foregroundStyle(chapter.note != nil && chapter.ready == 0 ? Color.red : Color.orange)
-                        .labelStyle(.titleAndIcon)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .frame(minWidth: 34, minHeight: 24)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Dịch trước cả chương: đã dịch sẵn \(chapter.ready) bóng thoại")
-            }
-            // Loa: đọc to câu tiếng Anh của các bóng thoại đang hiện; bấm lần nữa để dừng.
-            Button { speech.toggle(model.entries.map(\.original)) } label: {
-                Image(systemName: speech.isSpeaking ? "speaker.wave.2.fill" : "speaker.wave.2")
-                    .foregroundStyle(speech.isSpeaking ? Color.orange : Color.accentColor)
-                    .frame(width: 34, height: 24)
-            }
-            .disabled(model.entries.isEmpty)
-            .accessibilityLabel(speech.isSpeaking ? "Dừng đọc" : "Đọc câu tiếng Anh")
-            Button { model.rescan() } label: {
-                Image(systemName: "arrow.triangle.2.circlepath").frame(width: 30, height: 24)
-            }
-            .accessibilityLabel("Dịch lại")
+            TranslationControls(model: model)
             Button { withAnimation { collapsed.toggle() } } label: {
                 Image(systemName: collapsed ? "chevron.down" : "chevron.up").frame(width: 30, height: 24)
             }

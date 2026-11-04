@@ -34,6 +34,7 @@ struct SettingsView: View {
 
     @AppStorage(BrowserModel.autoHideChromeKey) private var autoHideChrome = true
     @AppStorage(BrowserDisplayMode.ballKey) private var showsTranslateBall = true
+    @AppStorage(BrowserDisplayMode.panelKey) private var showsTranslationPanel = true
     @AppStorage(BrowserModel.autoWholeScreenKey) private var autoWholeScreen = false
     @AppStorage(BrowserModel.autoWholeScreenSecondsKey) private var autoWholeScreenSeconds = 5.0
     @AppStorage(SpeechSettingsKey.engine) private var speechEngine: SpeechEngine = .defaultEngine
@@ -150,6 +151,7 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("Hiện khung dịch (Trình duyệt)", isOn: $showsTranslationPanel)
                     Picker("Cỡ cửa sổ", selection: $windowSize) {
                         ForEach(WindowSize.allCases) { Text($0.title).tag($0) }
                     }
@@ -166,7 +168,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Cửa sổ dịch")
                 } footer: {
-                    Text("Mỗi lần hiện tối đa số bóng thoại đã chọn, từ trên xuống. Cuộn xuống: bỏ qua các bóng đã hiện, hiện tiếp các bóng bên dưới (đã dịch sẵn). Không cuộn thì giữ nguyên. Vùng đọc: chỉ lấy bóng thoại trong vùng này của màn hình.")
+                    Text("Tắt \"Hiện khung dịch\": trang truyện không bị che; trạng thái, số ⚡︎ dịch sẵn, nút loa và nút dịch lại nằm ở thanh công cụ dưới (vuốt lên để hiện). Dùng quả bóng hoặc \"Tự dịch cả màn hình\" (Cài đặt → Trình duyệt) để xem tiếng Việt. Mỗi lần hiện tối đa số bóng thoại đã chọn, từ trên xuống. Cuộn xuống: bỏ qua các bóng đã hiện, hiện tiếp các bóng bên dưới (đã dịch sẵn). Không cuộn thì giữ nguyên. Vùng đọc: chỉ lấy bóng thoại trong vùng này của màn hình.")
                 }
 
                 Section {
