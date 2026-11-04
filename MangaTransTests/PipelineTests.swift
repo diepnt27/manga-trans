@@ -841,7 +841,7 @@ final class BubbleSegmenterTests: XCTestCase {
             ("ALRIGHT", CGRect(x: 50, y: 106, width: 40, height: 8)),
             ("LISTEN UP", CGRect(x: 30, y: 120, width: 80, height: 8)),
             ("EVERY", CGRect(x: 25, y: 134, width: 75, height: 8)),
-            ("ONE", CGRect(x: 40, y: 150, width: 48, height: 8)),
+            ("ONE", CGRect(x: 40, y: 148, width: 48, height: 8)),
         ]
         let lower = [
             ("TILL THEN", CGRect(x: 86, y: 164, width: 64, height: 8)),
