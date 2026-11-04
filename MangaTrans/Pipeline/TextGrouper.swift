@@ -19,8 +19,8 @@ struct TextBlock: Equatable {
 /// Gom các dòng OCR thành bóng thoại và sắp xếp theo thứ tự đọc (trên → dưới, trái → phải).
 enum TextGrouper {
     /// `rightToLeft`: manga Nhật — các bóng thoại cùng hàng đọc từ phải sang trái.
-    /// `bubbles`: mã bóng thoại của từng dòng (từ `BubbleSegmenter`); dòng khác bóng không bao giờ bị gộp,
-    /// dòng cùng bóng được gộp dù cách xa hơn bình thường. `bubbleRects`: khung lòng bóng thoại theo mã.
+    /// `bubbles`: mã bóng thoại của từng dòng (từ `BubbleSegmenter`); dòng khác bóng không bao giờ bị gộp.
+    /// `bubbleRects`: khung lòng bóng thoại theo mã.
     static func group(_ lines: [OCRLine], imageSize: CGSize, rightToLeft: Bool = false,
                       bubbles: [Int?]? = nil, bubbleRects: [Int: CGRect] = [:]) -> [TextBlock] {
         guard !lines.isEmpty else { return [] }
@@ -42,8 +42,9 @@ enum TextGrouper {
             guard let bubbles else { return belongTogether(rects[i], rects[j]) }
             switch (bubbles[i], bubbles[j]) {
             case let (a?, b?):
-                // Khác bóng thoại (có viền ngăn cách) → không bao giờ gộp; cùng bóng → gộp dù cách xa hơn.
-                return a == b && (belongTogether(rects[i], rects[j]) || sameBubbleNeighbors(rects[i], rects[j]))
+                // Khác bóng thoại (có viền ngăn cách) → không bao giờ gộp. Cùng một vùng vẫn xét khoảng cách:
+                // hai bóng dính liền nhau (bóng đôi) có lòng bóng thông nhau nhưng là 2 câu riêng.
+                return a == b && belongTogether(rects[i], rects[j])
             default:
                 // Dòng không tìm được bóng (điểm loang rơi vào chữ, bóng không viền kín): gộp theo khoảng cách như thường.
                 return belongTogether(rects[i], rects[j])
@@ -59,10 +60,15 @@ enum TextGrouper {
         var groups: [Int: [Int]] = [:]
         for i in lines.indices { groups[find(i), default: []].append(i) }
 
+        let regionOf = { (indices: [Int]) -> Int? in indices.lazy.compactMap { bubbles?[$0] ?? nil }.first }
+        var blocksPerRegion: [Int: Int] = [:]
+        groups.values.compactMap(regionOf).forEach { blocksPerRegion[$0, default: 0] += 1 }
+
         let blocks = groups.values.map { indices -> TextBlock in
             var block = makeBlock(indices.map { lines[$0] }, pixelRects: indices.map { rects[$0] })
-            // Phủ bản dịch lên cả lòng bóng chỉ khi lòng bóng không quá lớn so với chữ (tránh che cả mảng tranh).
-            if let id = indices.lazy.compactMap({ bubbles?[$0] ?? nil }).first, let bubble = bubbleRects[id],
+            // Phủ bản dịch lên cả lòng bóng chỉ khi vùng đó có đúng một câu (bóng đôi dính liền: mỗi câu phủ chỗ chữ
+            // của nó) và lòng bóng không quá lớn so với chữ (tránh che cả mảng tranh).
+            if let id = regionOf(indices), blocksPerRegion[id] == 1, let bubble = bubbleRects[id],
                bubble.width * bubble.height <= block.rect.width * block.rect.height * 8 {
                 block.bubbleRect = bubble
             }
@@ -89,15 +95,6 @@ enum TextGrouper {
         guard vGap < hMax * 0.9 else { return false }
         // Chữ trong bóng thoại thường căn giữa: chồng nhau theo chiều ngang hoặc có tâm gần nhau.
         return hOverlap > 0 || abs(a.midX - b.midX) < max(a.width, b.width) * 0.6
-    }
-
-    /// Hai dòng trong cùng một lòng bóng thoại: cho phép cách xa hơn (giãn dòng rộng, chữ cỡ khác nhau),
-    /// miễn là xếp chồng theo chiều dọc.
-    static func sameBubbleNeighbors(_ a: CGRect, _ b: CGRect) -> Bool {
-        let hMax = max(a.height, b.height)
-        let vGap = max(a.minY, b.minY) - min(a.maxY, b.maxY)
-        let hOverlap = min(a.maxX, b.maxX) - max(a.minX, b.minX)
-        return vGap < hMax * 2.5 && (hOverlap > 0 || abs(a.midX - b.midX) < max(a.width, b.width))
     }
 
     private static func makeBlock(_ lines: [OCRLine], pixelRects: [CGRect]) -> TextBlock {

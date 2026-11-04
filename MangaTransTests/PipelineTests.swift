@@ -779,6 +779,39 @@ final class BubbleSegmenterTests: XCTestCase {
         XCTAssertNotNil(blocks.first?.bubbleRect)
     }
 
+    /// Bóng đôi (2 bóng dính liền, lòng bóng thông nhau) trên nền trang trắng: 2 câu riêng,
+    /// mỗi câu phủ đúng chỗ chữ của nó (không phủ chung một khung to che mất câu kia).
+    func testJoinedDoubleBubbleKeepsTwoSentences() {
+        let first = [
+            ("HE SAID THAT HE", CGRect(x: 40, y: 150, width: 90, height: 8)),
+            ("WOULD PASS IT ON", CGRect(x: 38, y: 162, width: 94, height: 8)),
+        ]
+        let second = [
+            ("I FIXED THAT", CGRect(x: 110, y: 184, width: 60, height: 8)),
+            ("LOOPHOLE", CGRect(x: 118, y: 196, width: 44, height: 8)),
+        ]
+        // Viền chỉ chạy quanh mép ngoài của cả khối: lòng 2 bóng thông nhau. Nền trang trắng.
+        let ellipses: [(cx: Double, cy: Double, rx: Double, ry: Double)] = [(85, 160, 60, 30), (140, 195, 45, 28)]
+        let text = (first + second).map(\.1)
+        var pixels: [UInt8] = []
+        for y in 0..<height {
+            for x in 0..<width {
+                let px = Double(x) + 0.5, py = Double(y) + 0.5
+                let d = ellipses.map { pow((px - $0.cx) / $0.rx, 2) + pow((py - $0.cy) / $0.ry, 2) }.min() ?? 9
+                if text.contains(where: { $0.contains(CGPoint(x: px, y: py)) }) {
+                    pixels.append(0)
+                } else {
+                    pixels.append(d <= 0.9 ? 250 : d <= 1 ? 0 : 252)
+                }
+            }
+        }
+        let image = LuminanceImage(width: width, height: height, pixels: pixels)
+        let blocks = BrowserModel.makeBlocks((first + second).map { line($0.0, $0.1) },
+                                             imageSize: CGSize(width: 200, height: 400), background: image)
+        XCTAssertEqual(blocks.map(\.displayText), ["HE SAID THAT HE WOULD PASS IT ON", "I FIXED THAT LOOPHOLE"])
+        XCTAssertTrue(blocks.allSatisfy { $0.bubbleRect == nil })
+    }
+
     /// Bóng không viền kín trên nền trời sáng: vùng loang tràn ra cả mảng trời → không coi là một bóng
     /// (không phủ bản dịch lên cả mảng trời, 2 câu cách xa vẫn tách riêng, không bị bỏ).
     func testBorderlessBubblesOnLightSkyAreNotOneHugeBubble() {
