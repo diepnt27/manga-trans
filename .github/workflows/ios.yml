@@ -23,10 +23,17 @@ concurrency:
 jobs:
   # Hai việc chạy song song: build IPA (≈2–3 phút, đăng lên Releases ngay) và chạy test (≈6–7 phút).
   ipa:
-    runs-on: macos-15
+    # Máy macOS 14 thường còn trống khi hàng chờ macOS 15 bị nghẽn; dùng Xcode 16 mới nhất có trên máy.
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Chọn Xcode 16
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
 
       - name: Cài XcodeGen
         run: brew install xcodegen
