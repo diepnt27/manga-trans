@@ -57,10 +57,10 @@ final class ChapterPrefetcher {
         let settings = AppSettings.load()
         guard settings.chapterPrefetch, settings.translationConsent, settings.engine.chapterBatchSize != nil,
               webView.bounds.width > 0 else { return }
-        // Tiết kiệm pin / máy đang nóng: chỉ dịch phần đang xem.
-        let thermal = ProcessInfo.processInfo.thermalState
-        if ProcessInfo.processInfo.isLowPowerModeEnabled || thermal == .serious || thermal == .critical {
-            progress.note = "Tạm dừng: đang bật nguồn điện thấp hoặc máy nóng"
+        // Vẫn chạy khi bật Chế độ nguồn điện thấp (pin vàng). Chỉ dừng khi máy quá nóng ở mức nguy hiểm
+        // (iOS sắp tự hạ hiệu năng / tắt bớt tính năng để bảo vệ máy).
+        if ProcessInfo.processInfo.thermalState == .critical {
+            progress.note = "Tạm dừng: máy đang quá nóng"
             return
         }
         if task != nil {

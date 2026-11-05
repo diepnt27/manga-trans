@@ -224,7 +224,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Nhận dạng chữ")
                 } footer: {
-                    Text("\"Dịch trước cả chương\" (Trình duyệt, bộ dịch AI / Google Cloud): mở chương là app đọc ngầm mọi ảnh truyện trên trang, gom bóng thoại gửi dịch 1 lần (tối đa 60 câu/lần) — tiết kiệm token, bản dịch nhất quán hơn, cuộn tới đâu hiện ngay tới đó (⚡︎ trên khung dịch là số câu đã sẵn). Tự tạm dừng khi bật Chế độ nguồn điện thấp hoặc máy nóng. \"Dịch trước khi đang cuộn\": bóng thoại được dịch sẵn lúc bạn cuộn chậm, dừng lại là hiện ngay (tốn thêm lượt gọi API cho đoạn chỉ lướt qua). Nếu việc quét màn hình tự tắt, hãy chọn OCR \"Nhanh\". \"Chờ đứng yên\": thời gian màn hình phải dừng cuộn trước khi dịch. Bỏ qua mép trên/dưới để không dịch thanh trạng thái và thanh công cụ trình duyệt.")
+                    Text("\"Dịch trước cả chương\" (Trình duyệt, bộ dịch AI / Google Cloud): mở chương là app đọc ngầm mọi ảnh truyện trên trang, gom bóng thoại gửi dịch 1 lần (tối đa 60 câu/lần) — tiết kiệm token, bản dịch nhất quán hơn, cuộn tới đâu hiện ngay tới đó (⚡︎ trên khung dịch là số câu đã sẵn). Vẫn chạy cả khi bật Chế độ nguồn điện thấp, chỉ tạm dừng khi máy quá nóng. \"Dịch trước khi đang cuộn\": bóng thoại được dịch sẵn lúc bạn cuộn chậm, dừng lại là hiện ngay (tốn thêm lượt gọi API cho đoạn chỉ lướt qua). Nếu việc quét màn hình tự tắt, hãy chọn OCR \"Nhanh\". \"Chờ đứng yên\": thời gian màn hình phải dừng cuộn trước khi dịch. Bỏ qua mép trên/dưới để không dịch thanh trạng thái và thanh công cụ trình duyệt.")
                 }
             }
             .navigationTitle("Cài đặt")
